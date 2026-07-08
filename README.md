@@ -183,7 +183,8 @@ Default config settings:
     "Background bash commands will report automatically when they finish; do not keep polling manually unless you need interim output.",
     "Use {{tmuxToolName}} list to find background windows",
     "Use {{tmuxToolName}} peek/kill with a stable #{window_id} like @123.",
-    "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live."
+    "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live.",
+    "If a background command's completion is missing, its full output is saved in a .out file under {{outputDir}}; recover it with `find {{outputDir}} -name '*.out'` then read."
   ],
 
   // ─────────────────────────────────────────────────────────────
@@ -304,7 +305,7 @@ Default config settings:
   "preserveOutputFiles": true, // true (default) | false
 
   // Base directory for per-session signal files, generated scripts, and .out files.
-  "outputDir": "/tmp/pi-tmux-bash",
+  "outputDir": "/tmp/pi-bg-jobs",
 
   // Environment names not exported from Pi into bash-in-tmux scripts.
   // Skips shell/tmux bookkeeping that should be owned by the new tmux window.

@@ -673,7 +673,7 @@ const startPoller = (
 
   stopPoller(state, session, windowId);
   let lastText: string | undefined;
-  const timer = setInterval(() => {
+  const tick = async (): Promise<void> => {
     const filters = tmuxWindowFiltersForScope(gitRoot, piSessionId, options);
     const window = getBashCreatedWindows(session, options, filters).find(
       (item) => item.id === windowId,
@@ -708,17 +708,14 @@ const startPoller = (
       : pollCustomMessage(window, output, options);
 
     if (completed) {
-      pi.sendMessage(message, { triggerTurn: true, deliverAs: "followUp" });
+      await deliverCompletionAndCloseOnSuccess(pi, message, windowId, state, options);
     } else if (options.pollDelivery === "model") {
       pi.sendMessage(message, { triggerTurn: true, deliverAs: "followUp" });
     } else {
       sendPollMessageWhenIdle(pi, state, message);
     }
-    if (completed) {
-      closeWindowOnCompletion(windowId, options);
-      updateStoredBackgroundProcessStatus(state, options);
-    }
-  }, interval * 1000);
+  };
+  const timer = setInterval(() => void tick().catch(() => {}), interval * 1000);
 
   state.pollers.set(pollerKey(session, windowId), {
     timer,
@@ -732,13 +729,13 @@ const startPoller = (
   });
 };
 
-const handleCompletedExitCodeFile = (
+const handleCompletedExitCodeFile = async (
   state: ExtensionState,
   pi: ExtensionAPI,
   exitCodeFilePath: string,
   filename: string,
   options: ResolvedOptions,
-): boolean => {
+): Promise<boolean> => {
   const parsed = parseExitCodeFilename(filename);
   if (!parsed) return false;
 
@@ -764,22 +761,39 @@ const handleCompletedExitCodeFile = (
   const code = parseInt(exitCode);
   stopPoller(state, parsed.session, parsed.windowId);
 
-  pi.sendMessage(completionCustomMessage(code, output), {
-    triggerTurn: true,
-    deliverAs: "followUp",
-  });
-  closeWindowOnCompletion(parsed.windowId, options);
-  updateStoredBackgroundProcessStatus(state, options);
+  await deliverCompletionAndCloseOnSuccess(
+    pi,
+    completionCustomMessage(code, output),
+    parsed.windowId,
+    state,
+    options,
+  );
   return true;
 };
 
-const handleExitCodeFile = (
+const deliverCompletionAndCloseOnSuccess = async (
+  pi: ExtensionAPI,
+  message: CustomMessageInput,
+  windowId: string,
+  state: ExtensionState,
+  options: ResolvedOptions,
+): Promise<void> => {
+  try {
+    await pi.sendMessage(message, { triggerTurn: true, deliverAs: "steer" });
+  } catch {
+    return;
+  }
+  closeWindowOnCompletion(windowId, options);
+  updateStoredBackgroundProcessStatus(state, options);
+};
+
+const handleExitCodeFile = async (
   state: ExtensionState,
   pi: ExtensionAPI,
   runDir: string,
   filename: string,
   options: ResolvedOptions,
-): void => {
+): Promise<void> => {
   if (!state.ownedExitCodeFiles.has(filename)) return;
   if (state.foregroundExitCodeFiles.has(filename)) return;
 
@@ -787,7 +801,7 @@ const handleExitCodeFile = (
   if (!existsSync(exitCodeFilePath)) return;
 
   try {
-    if (handleCompletedExitCodeFile(state, pi, exitCodeFilePath, filename, options)) {
+    if (await handleCompletedExitCodeFile(state, pi, exitCodeFilePath, filename, options)) {
       state.ownedExitCodeFiles.delete(filename);
     }
   } catch {}
@@ -799,7 +813,11 @@ const startWatching = (state: ExtensionState, pi: ExtensionAPI, options: Resolve
   const runDir = getRunDir(state, options);
   state.watcher = watch(runDir, (_eventType, filename) => {
     if (!filename || filename.endsWith(".sh") || filename.endsWith(".out")) return;
-    setTimeout(() => handleExitCodeFile(state, pi, runDir, filename.toString(), options), 100);
+    setTimeout(
+      () =>
+        void handleExitCodeFile(state, pi, runDir, filename.toString(), options).catch(() => {}),
+      100,
+    );
   });
 };
 

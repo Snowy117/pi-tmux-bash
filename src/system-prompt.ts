@@ -11,6 +11,7 @@ export const renderPromptTemplate = (template: string, options: ResolvedOptions)
     defaultTimeoutSeconds: String(options.defaultTimeoutSeconds),
     maxOutputKb: String(options.maxOutputBytes / 1024),
     maxTimeoutSeconds: String(options.maxTimeoutSeconds),
+    outputDir: options.outputDir,
     tmuxToolName: options.tmuxToolName,
   };
 

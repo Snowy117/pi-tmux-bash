@@ -32,8 +32,9 @@ const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
   'Use {{bashToolName}} with background: true or timeoutAction: "background" for long-running commands, servers, watchers, REPLs, interactive prompts, and background bash commands.',
   "Background bash commands will report automatically when they finish; do not keep polling manually unless you need interim output.",
   "Use {{tmuxToolName}} list to find background windows",
-  "Use {{tmuxToolName}} peek/kill with a stable #{window_id} like @123.",
+  "Use {{tmuxToolName}} peek/kill with a stable window id like @123.",
   "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live.",
+  "If a background command's completion is missing, its full output is saved in a .out file under {{outputDir}}; recover it with `find {{outputDir}} -name '*.out'` then read.",
 ];
 
 const promptTemplateVariables = [
@@ -43,6 +44,7 @@ const promptTemplateVariables = [
   "defaultTimeoutSeconds",
   "maxOutputKb",
   "maxTimeoutSeconds",
+  "outputDir",
   "tmuxToolName",
 ];
 
@@ -126,7 +128,7 @@ const buildTmuxBashOptionsSchema = () =>
       autoCloseWindowsOnCompletion: z.boolean().default(true),
       alwaysShowOutputFilePath: z.boolean().default(false),
       preserveOutputFiles: z.boolean().default(true),
-      outputDir: nonEmptyStringSchema.default("/tmp/pi-tmux-bash"),
+      outputDir: nonEmptyStringSchema.default("/tmp/pi-bg-jobs"),
       defaultTimeoutSeconds: positiveIntegerSchema.default(30),
       defaultTimeoutAction: z.enum(["kill", "background"]).default("background"),
       maxTimeoutSeconds: positiveIntegerSchema.default(60),
