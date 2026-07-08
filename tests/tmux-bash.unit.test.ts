@@ -205,21 +205,21 @@ describe("tmux-bash unit", () => {
 
     it("registers tmux tool with default actions only", () => {
       const tools = registeredToolsForOptions({});
-      const tmuxTool = registeredTool(tools, "tmux");
+      const tmuxTool = registeredTool(tools, "bg_jobs");
       const action = tmuxTool.parameters.properties?.action as { enum?: string[] };
 
       expect(action.enum).toEqual(["list", "peek", "kill"]);
-      expect(tmuxTool.promptGuidelines?.join("\n")).toContain("tmux peek/kill");
+      expect(tmuxTool.promptGuidelines?.join("\n")).toContain("bg_jobs peek/kill");
       expect(tmuxTool.promptGuidelines?.join("\n")).not.toContain("poll/unpoll");
     });
 
     it("registers tmux tool with configured actions only", () => {
       const tools = registeredToolsForOptions({ tmuxEnabledActions: ["peek", "kill"] });
-      const tmuxTool = registeredTool(tools, "tmux");
+      const tmuxTool = registeredTool(tools, "bg_jobs");
       const action = tmuxTool.parameters.properties?.action as { enum?: string[] };
 
       expect(action.enum).toEqual(["peek", "kill"]);
-      expect(tmuxTool.promptGuidelines?.join("\n")).toContain("tmux peek/kill");
+      expect(tmuxTool.promptGuidelines?.join("\n")).toContain("bg_jobs peek/kill");
     });
 
     it("removes bash polling parameters by default", () => {

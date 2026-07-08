@@ -30,7 +30,6 @@ import {
   sessionExists,
   TMUX_WINDOW_OPTIONS,
   tmuxFormatOption,
-  tmuxWindowAttachHint,
   tmuxWindowFiltersForScope,
   type TmuxWindow,
   type TmuxWindowFilters,
@@ -582,12 +581,10 @@ const pollMessageDetails = (
   output: FormattedOutput,
   options: ResolvedOptions,
 ): PollMessageRenderDetails => ({
-  summary: `tmux poll: ${window.title} ${window.id}`,
+  summary: `background poll: ${window.title} ${window.id}`,
   command: `$ ${window.displayCommand ?? window.title}`,
   output: output.details.render,
-  attachLines: [
-    indentDisplayLine(tmuxWindowAttachHint(window.id, process.env, options.tmuxBinary)),
-  ],
+  attachLines: [],
 });
 
 const formatPollMessage = (details: PollMessageRenderDetails): string =>
@@ -595,8 +592,6 @@ const formatPollMessage = (details: PollMessageRenderDetails): string =>
     details.summary,
     indentDisplayLine(details.command),
     ...indentDisplayLines(formatRenderedBashResult(details.output, { expanded: true }).split("\n")),
-    "",
-    ...details.attachLines,
   ].join("\n");
 
 const pollCustomMessage = (
@@ -886,7 +881,7 @@ const compactPeekContextLine = (line: string): string =>
   line.replace(/^\.\.\. \((\d+) earlier lines,.*to expand\)$/, "... ($1 earlier lines omitted)");
 
 const peekWindowContextLines = (window: TmuxWindow, options: ResolvedOptions): string[] => [
-  `tmux window: ${window.title} ${window.id}`,
+  `background window: ${window.title} ${window.id}`,
   ...bashWindowDisplayLines(
     window,
     false,
@@ -899,13 +894,9 @@ const peekWindowContextLines = (window: TmuxWindow, options: ResolvedOptions): s
 ];
 
 const renderPeekDetails = (window: TmuxWindow, options: ResolvedOptions): TmuxRenderDetails => ({
-  summary: `tmux window: ${window.title} ${window.id}`,
+  summary: `background window: ${window.title} ${window.id}`,
   expandedLines: peekWindowExpandedLines(window, options),
   collapsedLines: peekWindowCollapsedLines(window, options),
-  attachLines: [
-    "",
-    indentDisplayLine(tmuxWindowAttachHint(window.id, process.env, options.tmuxBinary)),
-  ],
 });
 
 const isTmuxWindowId = (window: string): boolean => /^@\d+$/.test(window);
@@ -926,11 +917,11 @@ const requireBashWindowById = (
   windowId: string,
 ) => {
   if (!isTmuxWindowId(windowId)) {
-    return toolError(`Error: ${action} requires a tmux #{window_id}, e.g. @123.`);
+    return toolError(`Error: ${action} requires a background window id, e.g. @123.`);
   }
 
   const window = findBashWindowById(session, filters, options, windowId);
-  if (!window) return toolError(`No bash-created tmux window ${windowId} in session ${session}.`);
+  if (!window) return toolError(`No bash-created background window ${windowId} in session ${session}.`);
   return window;
 };
 
@@ -980,7 +971,7 @@ const killAction = (
 
   exec(`${tmuxCommand(options)} kill-window -t ${shellQuote(params.window)}`);
   stopPoller(state, session, window.id);
-  return summaryToolText(`Killed background tmux window: ${window.title} ${window.id}.`);
+  return summaryToolText(`Killed background window: ${window.title} ${window.id}.`);
 };
 
 const pollAction = (
@@ -1160,7 +1151,7 @@ export const runBashInTmux = async (
       content: [
         {
           type: "text" as const,
-          text: `Started in background tmux window: ${tmuxWindowNameForCommand(params.command, params.name, options)} ${result.windowId}.${requestedPollInterval > 0 ? ` Polling every ${pollInterval}s.` : ""}\nResult will be reported when it finishes.\n\n${tmuxWindowAttachHint(result.windowId, process.env, options.tmuxBinary)}`,
+          text: `Started in background window: ${tmuxWindowNameForCommand(params.command, params.name, options)} ${result.windowId}.${requestedPollInterval > 0 ? ` Polling every ${pollInterval}s.` : ""}\nResult will be reported when it finishes.`,
         },
       ],
       details: undefined,
@@ -1223,7 +1214,7 @@ export const runBashInTmux = async (
         piSessionId,
         commandRun,
       );
-    const timeoutText = `Still running after ${params.timeout}s in background tmux${requestedPollInterval > 0 ? ` and polling every ${pollInterval}s` : ""}. ${timeoutBackgroundHint(options)}`;
+    const timeoutText = `Still running after ${params.timeout}s in the background${requestedPollInterval > 0 ? ` and polling every ${pollInterval}s` : ""}. ${timeoutBackgroundHint(options)}`;
     return {
       content: [
         {

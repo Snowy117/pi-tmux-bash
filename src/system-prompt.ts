@@ -1,4 +1,3 @@
-import { tmuxWindowAttachCommand } from "./tmux-utils";
 import type { ResolvedOptions } from "./config";
 
 const replaceTemplateVariable = (template: string, variable: string, value: string): string =>
@@ -6,7 +5,6 @@ const replaceTemplateVariable = (template: string, variable: string, value: stri
 
 export const renderPromptTemplate = (template: string, options: ResolvedOptions): string => {
   const variables = {
-    attachCommand: tmuxWindowAttachCommand("@123", process.env, options.tmuxBinary),
     bashContextLines: String(options.bashContextLines),
     bashToolName: options.bashToolName,
     defaultTimeoutAction: options.defaultTimeoutAction,

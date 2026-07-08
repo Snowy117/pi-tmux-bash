@@ -16,13 +16,13 @@ const DEFAULT_TMUX_ENV_EXPORT_DENYLIST = [
   "TMUX_PANE",
 ] as const;
 
-const DEFAULT_BASH_SYSTEM_PROMPT_SNIPPET = "Execute bash commands in background tmux windows";
+const DEFAULT_BASH_SYSTEM_PROMPT_SNIPPET = "Execute bash commands in background windows";
 const DEFAULT_TMUX_SYSTEM_PROMPT_SNIPPET =
-  "Inspect and control the background tmux sessions created by bash tool";
+  "Inspect and control the background jobs created by bash tool";
 const DEFAULT_BASH_TOOL_DESCRIPTION =
-  'Execute a bash command in a background tmux window. Output is truncated to last {{bashContextLines}} lines or {{maxOutputKb}}KB. Defaults to a {{defaultTimeoutSeconds}}s timeout, max {{maxTimeoutSeconds}}s; timeoutAction defaults to "{{defaultTimeoutAction}}". Use background for long-running commands.';
+  'Execute a bash command in a background window. Output is truncated to last {{bashContextLines}} lines or {{maxOutputKb}}KB. Defaults to a {{defaultTimeoutSeconds}}s timeout, max {{maxTimeoutSeconds}}s; timeoutAction defaults to "{{defaultTimeoutAction}}". Use background for long-running commands.';
 const DEFAULT_TMUX_TOOL_DESCRIPTION =
-  "Inspect and control background tmux windows created by bash. Peek output is compact by default.";
+  "Inspect and control background jobs created by bash. Peek output is compact by default.";
 const DEFAULT_PEEK_EXPANDED_DISPLAY_LINES = 50;
 
 export const TMUX_ACTIONS = ["list", "peek", "kill", "poll", "unpoll", "list-polls"] as const;
@@ -33,11 +33,10 @@ const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
   "Background bash commands will report automatically when they finish; do not keep polling manually unless you need interim output.",
   "Use {{tmuxToolName}} list to find background windows",
   "Use {{tmuxToolName}} peek/kill with a stable #{window_id} like @123.",
-  "If asked, you can attach to tmux window using: {{attachCommand}}, where @123 is a #{window_id}.",
+  "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live.",
 ];
 
 const promptTemplateVariables = [
-  "attachCommand",
   "bashContextLines",
   "bashToolName",
   "defaultTimeoutAction",
@@ -92,7 +91,7 @@ const buildTmuxBashOptionsSchema = () =>
       globalTmuxSessionName: nonEmptyStringSchema.default("pi-background"),
       tmuxWindowScope: z.enum(["pi-session", "git-root", "all"]).default("pi-session"),
       bashToolName: nonEmptyStringSchema.default("bash"),
-      tmuxToolName: nonEmptyStringSchema.default("tmux"),
+      tmuxToolName: nonEmptyStringSchema.default("bg_jobs"),
       tmuxEnabledActions: z
         .array(tmuxActionSchema)
         .default(() => [...DEFAULT_TMUX_ENABLED_ACTIONS]),

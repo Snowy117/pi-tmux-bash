@@ -7,7 +7,6 @@ import {
   backgroundSessionName,
   getWindows,
   sessionExists,
-  tmuxWindowAttachCommand,
 } from "../src/tmux-utils";
 import {
   createPiE2eWorkspace,
@@ -51,25 +50,22 @@ const createWorkspace = (tmuxBashConfig: Record<string, unknown> = {}): PiE2eWor
 
 const backgroundStartContext = (workspace: PiE2eWorkspace): string => {
   const window = getWindows(workspace.tmuxSession()).at(0);
-  const attachCommand = tmuxWindowAttachCommand(window?.id ?? "", process.env, "tmux");
 
   return [
-    `Started in background tmux window: ${window?.title} ${window?.id}.`,
+    `Started in background window: ${window?.title} ${window?.id}.`,
     "Result will be reported when it finishes.",
-    "",
-    `Attach with: ${attachCommand}`,
   ].join("\n");
 };
 
 const peekContextOutput = (workspace: PiE2eWorkspace): string => {
   const window = getWindows(workspace.tmuxSession()).find((item) => item.title === "peek-test");
-  return `tmux window: peek-test ${window?.id}\n$ printf 'peek-me\\n'; sleep 30\npeek-me`;
+  return `background window: peek-test ${window?.id}\n$ printf 'peek-me\\n'; sleep 30\npeek-me`;
 };
 
 const compactPeekContextOutput = (workspace: PiE2eWorkspace): string => {
   const window = getWindows(workspace.tmuxSession()).find((item) => item.title === "peek-compact");
   return [
-    `tmux window: peek-compact ${window?.id}`,
+    `background window: peek-compact ${window?.id}`,
     `$ for i in $(seq 1 8); do printf 'peek-compact-%s\\n' "$i"; done; sleep 30`,
     "... (3 earlier lines omitted)",
     "peek-compact-4",
@@ -442,7 +438,7 @@ describe("tmux-bash e2e", () => {
       bashSystemPromptSnippet:
         "CUSTOM bash {{defaultTimeoutSeconds}}/{{maxTimeoutSeconds}}/{{maxOutputKb}}",
       tmuxSystemPromptSnippet: false,
-      systemPromptGuidelines: ["Use {{tmuxToolName}} with {{attachCommand}} and @123."],
+      systemPromptGuidelines: ["Use {{tmuxToolName}} with window @123."],
     });
     const outputPath = contextPath(workspace, "system-prompt");
 
@@ -452,7 +448,7 @@ describe("tmux-bash e2e", () => {
     const prompt = readFileSync(outputPath, "utf8");
     expect(prompt).toContain("- bash: CUSTOM bash 30/60/50");
     expect(prompt).not.toContain("- mux: Inspect and control");
-    expect(prompt).toContain("- Use mux with tmux");
+    expect(prompt).toContain("- Use mux with window @123");
     expect(prompt).toContain("@123");
   });
 
@@ -491,8 +487,8 @@ describe("tmux-bash e2e", () => {
 
     const pollMessage = result.messages.find((message) => message.customType === "tmux-bash-poll");
 
-    expect(pollMessage?.content).toMatch(/^tmux poll: .* @\d+/);
-    expect(pollMessage?.content).toContain("Attach with: tmux");
+    expect(pollMessage?.content).toMatch(/^background poll: .* @\d+/);
+    expect(pollMessage?.content).not.toContain("Attach with:");
     expect(pollMessage?.content).not.toContain("(:");
     expect(pollMessage?.content).toContain(
       "$ printf 'line-1\\nline-2\\nline-3\\nline-4\\n'; sleep 5",
@@ -697,7 +693,7 @@ describe("tmux-bash e2e", () => {
     expectPiSuccess(startResult);
     expectPiSuccess(result);
     expect(workspace.readContextOutput("kill-window-id")).toBe(
-      `Killed background tmux window: kill-id ${windowId}.`,
+      `Killed background window: kill-id ${windowId}.`,
     );
     expect(windowTitles(workspace)).toEqual([]);
   }, 20_000);
@@ -724,7 +720,7 @@ describe("tmux-bash e2e", () => {
 
     expectPiSuccess(result);
     expect(workspace.readContextOutput("default-window-scope-kill")).toBe(
-      `No bash-created tmux window ${windowId} in session ${workspace.tmuxSession()}.`,
+      `No bash-created background window ${windowId} in session ${workspace.tmuxSession()}.`,
     );
     expect(windowTitles(workspace)).toEqual(["foreign"]);
   }, 20_000);

@@ -17,14 +17,14 @@ type SchemaOptions = {
 type InvalidInput<TInvalidResult> = (message: string) => TInvalidResult;
 
 const command = z.string().min(1).describe("Bash command to execute.");
-const name = z.string().optional().describe("Optional tmux window name.");
+const name = z.string().optional().describe("Optional background window name.");
 const backgroundFalse = z.literal(false).optional();
 const tmuxWindowId = z
   .string()
   .regex(/^@\d+$/)
-  .describe("tmux #{window_id}, e.g. @123.");
+  .describe("Background window id, e.g. @123.");
 const tmuxAction = <TAction extends string>(action: TAction) =>
-  z.literal(action).describe("tmux action.");
+  z.literal(action).describe("Action.");
 
 const timeout = (options: SchemaOptions) =>
   z
@@ -62,7 +62,7 @@ const foregroundTimeoutAction = (options: SchemaOptions) =>
     .default(options.defaultTimeoutAction)
     .describe('"kill" or "background" on timeout.');
 
-const background = z.literal(true).describe("Return immediately and keep running in tmux.");
+const background = z.literal(true).describe("Return immediately and keep running in the background.");
 
 const bashPollProperties = (options: SchemaOptions) =>
   options.bashPollIntervalEnabled

@@ -146,7 +146,7 @@ Default config settings:
   "bashToolName": "bash",
 
   // Tmux inspection/control tool name exposed to the agent.
-  "tmuxToolName": "tmux",
+  "tmuxToolName": "bg_jobs",
 
   // Tmux actions exposed to the agent. Set [] to disable registering the tmux tool.
   "tmuxEnabledActions": ["list", "peek", "kill"],
@@ -156,27 +156,24 @@ Default config settings:
 
   // Template variables:
   // `{{bashToolName}}`: configured with `bashToolName`, default `bash`
-  // `{{tmuxToolName}}`: configured with `tmuxToolName`, default `tmux`
-  // `{{attachCommand}}`:
-  //   Uses `tmux switch-client -t @123` when Pi is already inside tmux. Otherwise `tmux attach -t @123`.
-  //   Uses configured `tmuxBinary`.
+  // `{{tmuxToolName}}`: configured with `tmuxToolName`, default `bg_jobs`
   // `{{defaultTimeoutSeconds}}` / `{{defaultTimeoutAction}}` / `{{maxTimeoutSeconds}}`
   // `{{bashContextLines}}` / `{{maxOutputKb}}`
 
   // Bash tool description sent to the model tool schema.
   // Supports the same template variables as systemPromptGuidelines below.
-  "bashToolDescription": "Execute a bash command in a background tmux window. Output is truncated to last {{bashContextLines}} lines or {{maxOutputKb}}KB. Defaults to a {{defaultTimeoutSeconds}}s timeout, max {{maxTimeoutSeconds}}s; timeoutAction defaults to \"{{defaultTimeoutAction}}\". Use background for long-running commands.",
+  "bashToolDescription": "Execute a bash command in a background window. Output is truncated to last {{bashContextLines}} lines or {{maxOutputKb}}KB. Defaults to a {{defaultTimeoutSeconds}}s timeout, max {{maxTimeoutSeconds}}s; timeoutAction defaults to \"{{defaultTimeoutAction}}\". Use background for long-running commands.",
 
   // Tmux tool description sent to the model tool schema.
   // Supports the same template variables as systemPromptGuidelines below.
-  "tmuxToolDescription": "Inspect and control background tmux windows created by bash.",
+  "tmuxToolDescription": "Inspect and control background jobs created by bash.",
 
   // modify Pi's built-in system prompt.
   "systemPrompt": true,
 
   // Tool snippets for Pi's generated system prompt tools section.
-  "bashSystemPromptSnippet": "Execute bash commands in background tmux windows", // string | false (to disable)
-  "tmuxSystemPromptSnippet": "Inspect and control the background tmux sessions created by bash tool", // string | false (to disable)
+  "bashSystemPromptSnippet": "Execute bash commands in background windows", // string | false (to disable)
+  "tmuxSystemPromptSnippet": "Inspect and control the background jobs created by bash tool", // string | false (to disable)
 
   // Guideline bullets appended to Pi's generated system prompt:
   //   Omit systemPromptGuidelines to use defaults.
@@ -186,7 +183,7 @@ Default config settings:
     "Background bash commands will report automatically when they finish; do not keep polling manually unless you need interim output.",
     "Use {{tmuxToolName}} list to find background windows",
     "Use {{tmuxToolName}} peek/kill with a stable #{window_id} like @123.",
-    "If asked, you can attach to tmux window using: {{attachCommand}}, where @123 is a #{window_id}."
+    "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live."
   ],
 
   // ─────────────────────────────────────────────────────────────
