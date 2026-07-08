@@ -408,6 +408,21 @@ Took 5.0s`);
         "<toolTitle><bold>$ sleep 10</bold></toolTitle><muted> (timeout 15s)</muted>",
       );
     });
+
+    it("truncates the command to the configured display length", () => {
+      const command = "docker run --rm -it --network host -v $(pwd):/work ubuntu:24.04 bash -lc 'apt-get update'";
+      const result = formatRenderedBashCall({ command, timeout: 15 }, { commandDisplayLength: 40 });
+
+      expect(result).toBe("$ docker run --rm -it --network host -v $… (timeout 15s)");
+    });
+
+    it("shows the full command when commandDisplayLength is 0", () => {
+      const command = "x".repeat(200);
+      const result = formatRenderedBashCall({ command, timeout: 15 }, { commandDisplayLength: 0 });
+
+      expect(result).toBe(`$ ${command} (timeout 15s)`);
+      expect(result).not.toContain("…");
+    });
   });
 
   describe("displayCommandForCommand", () => {

@@ -105,6 +105,8 @@ const buildTmuxBashOptionsSchema = () =>
         .default(() => [...DEFAULT_TMUX_ENV_EXPORT_DENYLIST]),
       foregroundBashUpdateIntervalMs: positiveIntegerSchema.default(250),
       bashContextLines: positiveIntegerSchema.default(DEFAULT_MAX_LINES),
+      // Max characters of the command shown in the TUI tool-call title; 0 shows the full command.
+      bashCommandDisplayLength: z.number().int().nonnegative().default(80),
       bashCompactDisplayLines: positiveIntegerSchema.default(5),
       bashTruncatedCompactDisplayLines: positiveIntegerSchema.default(2),
       bashExpandedDisplayLines: positiveIntegerSchema.default(DEFAULT_MAX_LINES),

@@ -244,6 +244,9 @@ Default config settings:
   // Foreground bash output lines sent to model context.
   "bashContextLines": 2000,
 
+  // Max characters of the command shown in the TUI tool-call title. Set to 0 to show the full command.
+  "bashCommandDisplayLength": 80,
+
   // Completed background command lines sent to model context.
   "completedContextLines": 20,
 

@@ -259,7 +259,7 @@ const displayTextForLines = (lines: RenderedBashOutputLine[]): string[] =>
   lines.map(displayTextForLine);
 
 const truncateText = (text: string, maxLength: number): string =>
-  text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+  maxLength > 0 && text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 
 const formatCompletionDetailLines = (lines: RenderedBashOutputLine[]): string[] =>
   displayTextForLines(
@@ -271,8 +271,17 @@ const formatCompletionDetailLines = (lines: RenderedBashOutputLine[]): string[] 
     ),
   );
 
-const bashCallCommand = (args: Partial<BashInput>): string =>
-  truncateText((args.command ?? "...").replace(/\s+/g, " ").trim(), 80);
+const normalizeCommand = (args: Partial<BashInput>): string =>
+  (args.command ?? "...").replace(/\s+/g, " ").trim();
+
+export type BashCallRenderOptions = {
+  commandDisplayLength?: number;
+};
+
+const bashCallCommand = (
+  args: Partial<BashInput>,
+  commandDisplayLength = DEFAULT_OPTIONS.bashCommandDisplayLength,
+): string => truncateText(normalizeCommand(args), commandDisplayLength);
 
 const bashBackgroundMetadata = (args: Partial<BashInput>): string => {
   const poll =
@@ -288,11 +297,18 @@ const bashCallMetadata = (args: Partial<BashInput>): string[] => {
   );
 };
 
-export const formatRenderedBashCall = (args: Partial<BashInput>): string =>
-  [`$ ${bashCallCommand(args)}`, ...bashCallMetadata(args)].join(" ");
+export const formatRenderedBashCall = (
+  args: Partial<BashInput>,
+  { commandDisplayLength }: BashCallRenderOptions = {},
+): string =>
+  [`$ ${bashCallCommand(args, commandDisplayLength)}`, ...bashCallMetadata(args)].join(" ");
 
-export const renderBashCallText = (args: Partial<BashInput>, theme: RenderTheme): string =>
-  `${theme.fg("toolTitle", theme.bold(`$ ${bashCallCommand(args)}`))}${bashCallMetadata(args)
+export const renderBashCallText = (
+  args: Partial<BashInput>,
+  theme: RenderTheme,
+  { commandDisplayLength }: BashCallRenderOptions = {},
+): string =>
+  `${theme.fg("toolTitle", theme.bold(`$ ${bashCallCommand(args, commandDisplayLength)}`))}${bashCallMetadata(args)
     .map((item) => theme.fg("muted", ` ${item}`))
     .join("")}`;
 
