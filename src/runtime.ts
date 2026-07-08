@@ -1068,12 +1068,62 @@ const listPollsAction = (
   );
 };
 
-export const executeTool = (
+const COMPLETION_DELIVERY_GRACE_MS = 200;
+
+const waitAction = async (
+  params: Extract<TmuxInput, { action: "wait" }>,
+  session: string,
+  filters: TmuxWindowFilters,
+  options: ResolvedOptions,
+  signal: AbortSignal | undefined,
+) => {
+  if (!sessionExists(session, options.tmuxBinary))
+    return toolError(`No background session '${session}'.`);
+
+  const window = requireBashWindowById("wait", session, filters, options, params.window);
+  if ("isError" in window)
+    return summaryToolText(
+      `Background window ${params.window} is no longer running; it already finished and its result was delivered on completion.`,
+    );
+
+  // Completion sentinel is the .out path with its extension stripped.
+  const exitCodeFile = window.outputFile?.replace(/\.out$/, "");
+  // +1s beyond the bash cap so a task finishing right at the cap is still observed.
+  const timeoutSeconds = options.maxTimeoutSeconds + 1;
+  const deadline = Date.now() + timeoutSeconds * 1000;
+
+  const isFinished = (): boolean =>
+    Boolean(exitCodeFile && existsSync(exitCodeFile)) ||
+    !findBashWindowById(session, filters, options, params.window);
+
+  for (;;) {
+    if (signal?.aborted)
+      return summaryToolText(
+        `Wait aborted; ${window.title} ${window.id} still running in the background.`,
+      );
+    if (isFinished()) {
+      // The completion watcher delivers the result as a steer follow-up;
+      // we just confirm and let its 100ms debounce + delivery land first.
+      await sleep(COMPLETION_DELIVERY_GRACE_MS);
+      return summaryToolText(
+        `Background window ${window.title} ${window.id} finished; result delivered automatically.`,
+      );
+    }
+    if (Date.now() >= deadline)
+      return summaryToolText(
+        `Background window ${window.title} ${window.id} still running after ${timeoutSeconds}s; result will be reported when it finishes.`,
+      );
+    await sleep(100);
+  }
+};
+
+export const executeTool = async (
   params: TmuxInput,
   ctx: ExtensionContext,
   state: ExtensionState,
   pi: ExtensionAPI,
   options: ResolvedOptions,
+  signal?: AbortSignal,
 ) => {
   const gitRoot = resolveWorkspaceRoot(ctx.cwd, options.allowNonGitDirectories);
   if (!gitRoot)
@@ -1092,6 +1142,7 @@ export const executeTool = (
   if (params.action === "poll")
     return pollAction(params, session, gitRoot, piSessionId, filters, state, pi, options);
   if (params.action === "unpoll") return unpollAction(params, session, filters, state, options);
+  if (params.action === "wait") return waitAction(params, session, filters, options, signal);
   return listPollsAction(session, filters, state, options);
 };
 

@@ -208,7 +208,7 @@ describe("tmux-bash unit", () => {
       const tmuxTool = registeredTool(tools, "bg_jobs");
       const action = tmuxTool.parameters.properties?.action as { enum?: string[] };
 
-      expect(action.enum).toEqual(["list", "peek", "kill"]);
+      expect(action.enum).toEqual(["list", "peek", "kill", "wait"]);
       expect(tmuxTool.promptGuidelines?.join("\n")).toContain("bg_jobs peek/kill");
       expect(tmuxTool.promptGuidelines?.join("\n")).not.toContain("poll/unpoll");
     });

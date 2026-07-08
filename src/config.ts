@@ -25,8 +25,16 @@ const DEFAULT_TMUX_TOOL_DESCRIPTION =
   "Inspect and control background jobs created by bash. Peek output is compact by default.";
 const DEFAULT_PEEK_EXPANDED_DISPLAY_LINES = 50;
 
-export const TMUX_ACTIONS = ["list", "peek", "kill", "poll", "unpoll", "list-polls"] as const;
-const DEFAULT_TMUX_ENABLED_ACTIONS = ["list", "peek", "kill"] as const;
+export const TMUX_ACTIONS = [
+  "list",
+  "peek",
+  "kill",
+  "poll",
+  "unpoll",
+  "list-polls",
+  "wait",
+] as const;
+const DEFAULT_TMUX_ENABLED_ACTIONS = ["list", "peek", "kill", "wait"] as const;
 
 const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
   'Use {{bashToolName}} with background: true or timeoutAction: "background" for long-running commands, servers, watchers, REPLs, interactive prompts, and background bash commands.',
@@ -35,6 +43,7 @@ const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
   "Use {{tmuxToolName}} peek/kill with a stable window id like @123.",
   "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live.",
   "If a background command's completion is missing, its full output is saved in a .out file under {{outputDir}}; recover it with `find {{outputDir}} -name '*.out'` then read.",
+  "Use {{tmuxToolName}} wait to block the current turn until a background window finishes. It waits up to {{maxTimeoutSeconds}}s; if the task finishes in time, its result is delivered automatically as a follow-up — no need to peek or poll.",
 ];
 
 const promptTemplateVariables = [

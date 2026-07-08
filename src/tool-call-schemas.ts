@@ -97,7 +97,8 @@ export type TmuxInput =
   | { action: "list-polls" }
   | { action: "peek"; window: string }
   | { action: "poll"; window: string; pollInterval: number; pollLines: number }
-  | { action: "unpoll"; window: string };
+  | { action: "unpoll"; window: string }
+  | { action: "wait"; window: string };
 
 const buildBashInputSchema = (options: SchemaOptions): z.ZodType<BashInput> => {
   const pollProperties = bashPollProperties(options);
@@ -144,6 +145,7 @@ const tmuxInputSchemas = (options: SchemaOptions) => ({
       .describe("Lines captured per check-in."),
   }),
   unpoll: z.object({ action: tmuxAction("unpoll"), window: tmuxWindowId }),
+  wait: z.object({ action: tmuxAction("wait"), window: tmuxWindowId }),
 });
 
 const buildTmuxInputSchema = (options: SchemaOptions): z.ZodType<TmuxInput> => {

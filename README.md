@@ -92,6 +92,14 @@ The `tmux` tool allows the model to inspect running bash processes.
 { "action": "kill", "window": "@123" }
 ```
 
+### Wait for one background window to finish.
+
+```jsonc
+{ "action": "wait", "window": "@123" }
+```
+
+Blocks the current turn until the window finishes, up to `maxTimeoutSeconds + 1`s. If it finishes in time, the result is delivered automatically as a follow-up by the completion watcher (no need to peek); this action just confirms completion. If it is still running when the time elapses, it stays in the background and the result will be reported when it eventually finishes.
+
 ### Start periodic output check-ins for a window.
 
 ```jsonc
@@ -149,7 +157,7 @@ Default config settings:
   "tmuxToolName": "bg_jobs",
 
   // Tmux actions exposed to the agent. Set [] to disable registering the tmux tool.
-  "tmuxEnabledActions": ["list", "peek", "kill"],
+  "tmuxEnabledActions": ["list", "peek", "kill", "wait"],
 
   // Whether bash exposes pollInterval/pollLines and can start polling from a bash call.
   "bashPollIntervalEnabled": false,
