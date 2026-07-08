@@ -1,0 +1,64 @@
+{
+  "name": "@snowy117/pi-tmux-bash",
+  "version": "0.0.13",
+  "description": "Drop-in bash replacement that runs commands in the background using tmux. Forked from @richardgill/pi-tmux-bash with support for non-git directories.",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/Snowy117/pi-tmux-bash",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Snowy117/pi-tmux-bash.git"
+  },
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/extension.ts",
+    "./core": "./src/core.ts"
+  },
+  "scripts": {
+    "tsc": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@richardgill/lib": "0.0.2",
+    "@richardgill/pi-config": "0.0.8",
+    "@richardgill/pi-zod-tool-call": "0.0.3",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "=0.75.5",
+    "@earendil-works/pi-ai": "=0.75.5",
+    "@earendil-works/pi-coding-agent": "=0.75.5",
+    "@earendil-works/pi-tui": "=0.75.5",
+    "@sinclair/typebox": "=0.34.49",
+    "@types/node": "=25.6.0",
+    "tsx": "=4.21.0",
+    "typescript": "=6.0.3",
+    "vitest": "=4.1.5"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
