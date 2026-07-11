@@ -18,7 +18,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import type { FSWatcher } from "node:fs";
-import { join } from "node:path";
+import { join, resolve as resolvePath } from "node:path";
 import {
   calcTmuxSessionName,
   exec,
@@ -54,6 +54,41 @@ import {
   type FormattedOutput,
   type PollMessageRenderDetails,
 } from "./render";
+import { formatOutputForModel, resolveExecutableCommand, type HypaExecFn } from "./compress";
+
+const hypaExecFromPi =
+  (pi: ExtensionAPI): HypaExecFn =>
+  async (command, args, options) => {
+    const result = await pi.exec(command, args, { timeout: options?.timeout });
+    return {
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+      code: result.code,
+      killed: result.killed,
+    };
+  };
+
+const formatModelFacingOutput = async (args: {
+  rawText: string;
+  rawFilePath?: string;
+  options: ResolvedOptions;
+  contextLines: number;
+  pi?: ExtensionAPI;
+  windowId?: string;
+  state?: ExtensionState;
+}): Promise<FormattedOutput> => {
+  if (args.state && args.windowId && args.rawFilePath) {
+    args.state.rawOutputByWindowId.set(args.windowId, args.rawFilePath);
+  }
+  return formatOutputForModel({
+    rawText: args.rawText,
+    rawFilePath: args.rawFilePath,
+    options: args.options,
+    contextLines: args.contextLines,
+    exec: args.pi ? hypaExecFromPi(args.pi) : undefined,
+    windowId: args.windowId,
+  });
+};
 
 type TmuxRenderDetails = {
   summary: string;
@@ -90,6 +125,7 @@ export type ExtensionState = {
   pollers: Map<string, Poller>;
   pendingPollMessageTimers: Set<NodeJS.Timeout>;
   statusContext: ExtensionContext | null;
+  rawOutputByWindowId: Map<string, string>;
 };
 
 type RunWindowResult = {
@@ -107,6 +143,7 @@ export const createState = (): ExtensionState => ({
   pollers: new Map(),
   pendingPollMessageTimers: new Set(),
   statusContext: null,
+  rawOutputByWindowId: new Map(),
 });
 
 // runDir is a temp folder we create to store Pi session's exit-code files, and captured .out files.
@@ -689,13 +726,14 @@ const startPoller = (
     const outputFile = commandRun?.outputFile ?? window.outputFile;
     const outputLines = completed ? options.completedContextLines : lines;
     const output = completed
-      ? formatOutput(commandOutputTail(windowId, outputLines, options, outputFile), {
-          fullOutputPath: outputFile,
-          showFullOutputPath: options.alwaysShowOutputFilePath,
-          truncationOptions: {
-            maxLines: outputLines,
-            maxBytes: options.maxOutputBytes,
-          },
+      ? await formatModelFacingOutput({
+          rawText: commandOutputTail(windowId, outputLines, options, outputFile),
+          rawFilePath: outputFile,
+          options,
+          contextLines: outputLines,
+          pi,
+          windowId,
+          state,
         })
       : formatBashWindowOutput(window, options, outputLines);
     if (!completed && options.pollDelivery === "display" && output.text === lastText) return;
@@ -750,13 +788,14 @@ const handleCompletedExitCodeFile = async (
     execSafe(
       `${tmuxCommand(options)} capture-pane -t ${shellQuote(parsed.windowId)} -p -S -${options.completedContextLines}`,
     );
-  const output = formatOutput(rawOutput ?? "", {
-    fullOutputPath: fileOutput === null ? undefined : outputFile,
-    showFullOutputPath: options.alwaysShowOutputFilePath,
-    truncationOptions: {
-      maxLines: options.completedContextLines,
-      maxBytes: options.maxOutputBytes,
-    },
+  const output = await formatModelFacingOutput({
+    rawText: rawOutput ?? "",
+    rawFilePath: fileOutput === null ? undefined : outputFile,
+    options,
+    contextLines: options.completedContextLines,
+    pi,
+    windowId: parsed.windowId,
+    state,
   });
   const code = parseInt(exitCode);
   stopPoller(state, parsed.session, parsed.windowId);
@@ -843,6 +882,7 @@ export const cleanupState = (state: ExtensionState, options: ResolvedOptions): v
   state.foregroundExitCodeFiles.clear();
   state.ownedExitCodeFiles.clear();
   state.statusContext = null;
+  state.rawOutputByWindowId.clear();
 
   if (state.runDir) {
     cleanupRunDir(state.runDir, options.preserveOutputFiles);
@@ -958,6 +998,94 @@ const peekAction = (
   const output = peekWindowContextLines(window, options).join("\n");
   const render = renderPeekDetails(window, options);
   return renderedToolText(output, render, { session });
+};
+
+const isPathUnderOutputDir = (filePath: string, outputDir: string): boolean => {
+  const resolvedFile = resolvePath(filePath);
+  const resolvedDir = resolvePath(outputDir);
+  return resolvedFile === resolvedDir || resolvedFile.startsWith(`${resolvedDir}/`);
+};
+
+const resolveRawOutputPath = (
+  params: Extract<TmuxInput, { action: "raw" }>,
+  session: string,
+  filters: TmuxWindowFilters,
+  state: ExtensionState,
+  options: ResolvedOptions,
+): string | ReturnType<typeof toolError> => {
+  if (params.path) {
+    if (!isPathUnderOutputDir(params.path, options.outputDir)) {
+      return toolError(
+        `Error: path must be under outputDir (${options.outputDir}); got ${params.path}`,
+      );
+    }
+    if (!params.path.endsWith(".out")) {
+      return toolError(`Error: path must be a .out tee file; got ${params.path}`);
+    }
+    if (!existsSync(params.path)) {
+      return toolError(`Error: raw output file not found: ${params.path}`);
+    }
+    return params.path;
+  }
+
+  if (!params.window) {
+    return toolError("Error: raw requires window and/or path.");
+  }
+
+  const fromIndex = state.rawOutputByWindowId.get(params.window);
+  if (fromIndex && existsSync(fromIndex)) return fromIndex;
+
+  if (sessionExists(session, options.tmuxBinary)) {
+    const window = findBashWindowById(session, filters, options, params.window);
+    if (window?.outputFile && existsSync(window.outputFile)) return window.outputFile;
+  }
+
+  if (fromIndex) {
+    return toolError(
+      `Error: raw output file for ${params.window} is missing (${fromIndex}). It may have been deleted; set preserveOutputFiles: true.`,
+    );
+  }
+
+  return toolError(
+    `Error: no raw output indexed for ${params.window}. Use path= to an absolute .out file under ${options.outputDir}.`,
+  );
+};
+
+const rawAction = (
+  params: Extract<TmuxInput, { action: "raw" }>,
+  session: string,
+  filters: TmuxWindowFilters,
+  state: ExtensionState,
+  options: ResolvedOptions,
+) => {
+  const resolved = resolveRawOutputPath(params, session, filters, state, options);
+  if (typeof resolved !== "string") return resolved;
+
+  if (params.window) state.rawOutputByWindowId.set(params.window, resolved);
+
+  const rawText = readOutputFile(resolved) ?? "";
+  const output = formatOutput(rawText, {
+    fullOutputPath: resolved,
+    showFullOutputPath: true,
+    truncationOptions: {
+      maxLines: options.peekContextLines,
+      maxBytes: options.maxOutputBytes,
+    },
+  });
+
+  const summary = `Raw output ${params.window ? `${params.window} ` : ""}${resolved}`;
+  const bodyLines = formatRenderedBashResult(output.details.render, {
+    expanded: true,
+    compactDisplayLines: options.peekExpandedDisplayLines,
+    expandedDisplayLines: options.peekExpandedDisplayLines,
+    truncatedCompactDisplayLines: options.peekTruncatedCompactDisplayLines,
+  }).split("\n");
+
+  return renderedToolText(`${summary}\n\n${output.text}`, {
+    summary,
+    expandedLines: ["", ...bodyLines],
+    collapsedLines: ["", ...bodyLines.slice(-options.peekCompactDisplayLines)],
+  }, { session, path: resolved, window: params.window });
 };
 
 const listAction = (session: string, filters: TmuxWindowFilters, options: ResolvedOptions) => {
@@ -1133,6 +1261,7 @@ export const executeTool = async (
   const session = calcTmuxSessionName(gitRoot, options);
   const filters = tmuxWindowFiltersForScope(gitRoot, piSessionId, options);
   if (params.action === "peek") return peekAction(params, session, filters, options);
+  if (params.action === "raw") return rawAction(params, session, filters, state, options);
   if (params.action === "list") return listAction(session, filters, options);
   if (params.action === "kill") {
     const result = killAction(params, session, filters, state, options);
@@ -1179,12 +1308,16 @@ export const runBashInTmux = async (
   const session = calcTmuxSessionName(gitRoot, options);
   const piSessionId = ctx.sessionManager.getSessionId();
   const runDir = getRunDir(state, options);
+  const executableCommand = resolveExecutableCommand(
+    params.command,
+    options.unwrapHypaCommandWrapper,
+  ).command;
   const result = createBashWindow({
     runDir,
     session,
     gitRoot,
     piSessionId,
-    command: params.command,
+    command: executableCommand,
     name: params.name,
     sessionExists: sessionExists(session, options.tmuxBinary),
     options,
@@ -1195,6 +1328,9 @@ export const runBashInTmux = async (
     id: result.id,
     outputFile: result.outputFile,
   };
+  if (result.outputFile) {
+    state.rawOutputByWindowId.set(result.windowId, result.outputFile);
+  }
   const completionExitCodeFilename = exitCodeFilename(commandRun);
   state.ownedExitCodeFiles.add(completionExitCodeFilename);
 
@@ -1220,7 +1356,7 @@ export const runBashInTmux = async (
       content: [
         {
           type: "text" as const,
-          text: `Started in background window: ${tmuxWindowNameForCommand(params.command, params.name, options)} ${result.windowId}.${requestedPollInterval > 0 ? ` Polling every ${pollInterval}s.` : ""}\nResult will be reported when it finishes.`,
+          text: `Started in background window: ${tmuxWindowNameForCommand(executableCommand, params.name, options)} ${result.windowId}.${requestedPollInterval > 0 ? ` Polling every ${pollInterval}s.` : ""}\nResult will be reported when it finishes.`,
         },
       ],
       details: undefined,
@@ -1242,17 +1378,21 @@ export const runBashInTmux = async (
   if (exitCode !== "timeout" || params.timeoutAction !== "background") {
     state.ownedExitCodeFiles.delete(completionExitCodeFilename);
   }
-  const output = formatOutput(
-    commandOutputTail(result.windowId, options.bashContextLines, options, result.outputFile),
-    {
-      fullOutputPath: result.outputFile,
-      showFullOutputPath: options.alwaysShowOutputFilePath,
-      truncationOptions: {
-        maxLines: options.bashContextLines,
-        maxBytes: options.maxOutputBytes,
-      },
-    },
+  const rawText = commandOutputTail(
+    result.windowId,
+    options.bashContextLines,
+    options,
+    result.outputFile,
   );
+  const output = await formatModelFacingOutput({
+    rawText,
+    rawFilePath: result.outputFile,
+    options,
+    contextLines: options.bashContextLines,
+    pi,
+    windowId: result.windowId,
+    state,
+  });
   const text = output.text;
 
   if (exitCode === "aborted") {

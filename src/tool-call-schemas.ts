@@ -96,6 +96,7 @@ export type TmuxInput =
   | { action: "kill"; window: string }
   | { action: "list-polls" }
   | { action: "peek"; window: string }
+  | { action: "raw"; window?: string; path?: string }
   | { action: "poll"; window: string; pollInterval: number; pollLines: number }
   | { action: "unpoll"; window: string }
   | { action: "wait"; window: string };
@@ -128,6 +129,19 @@ const tmuxInputSchemas = (options: SchemaOptions) => ({
   kill: z.object({ action: tmuxAction("kill"), window: tmuxWindowId }),
   "list-polls": z.object({ action: tmuxAction("list-polls") }),
   peek: z.object({ action: tmuxAction("peek"), window: tmuxWindowId }),
+  raw: z
+    .object({
+      action: tmuxAction("raw"),
+      window: tmuxWindowId.optional().describe("Stable window id like @123 when still listed."),
+      path: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Absolute path to a bash tee .out file under the configured outputDir."),
+    })
+    .refine((value) => Boolean(value.window || value.path), {
+      message: "raw requires window and/or path",
+    }),
   poll: z.object({
     action: tmuxAction("poll"),
     window: tmuxWindowId,

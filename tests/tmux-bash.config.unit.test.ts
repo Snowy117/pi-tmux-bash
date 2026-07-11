@@ -60,4 +60,21 @@ describe("tmux-bash config", () => {
 
     expect(loadTmuxBashConfig().defaultTimeoutAction).toBe("kill");
   });
+
+  it("loads model output compression config", () => {
+    const folder = createTempDir();
+    process.env.PI_EXTENSION_CONFIG_DIR = folder;
+    writeTmuxBashConfig(folder, {
+      modelOutputCompression: "hypa",
+      hypaBinary: "/usr/local/bin/hypa",
+      hypaCompressMinBytes: 4096,
+      unwrapHypaCommandWrapper: false,
+    });
+
+    const loaded = loadTmuxBashConfig();
+    expect(loaded.modelOutputCompression).toBe("hypa");
+    expect(loaded.hypaBinary).toBe("/usr/local/bin/hypa");
+    expect(loaded.hypaCompressMinBytes).toBe(4096);
+    expect(loaded.unwrapHypaCommandWrapper).toBe(false);
+  });
 });

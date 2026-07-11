@@ -1,6 +1,6 @@
 {
   "name": "@snowy117/pi-tmux-bash",
-  "version": "0.0.13",
+  "version": "0.0.15",
   "description": "Drop-in bash replacement that runs commands in the background using tmux. Forked from @richardgill/pi-tmux-bash with support for non-git directories.",
   "keywords": [
     "pi-package"

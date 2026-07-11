@@ -20,7 +20,7 @@ type TmuxRenderDetails = {
   attachLines?: string[];
 };
 
-const TARGETED_TMUX_ACTIONS = ["peek", "kill", "poll", "unpoll", "wait"];
+const TARGETED_TMUX_ACTIONS = ["peek", "raw", "kill", "poll", "unpoll", "wait"];
 
 const formatTmuxCallWindowLabel = (action: string, window: number | string | undefined): string => {
   if (!TARGETED_TMUX_ACTIONS.includes(action) || window === undefined) return "";

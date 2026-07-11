@@ -2,6 +2,18 @@
 
 This is a fork of `@richardgill/pi-tmux-bash`. Versions below `0.0.13` are inherited from the upstream package.
 
+## 0.0.15
+
+### Minor Changes
+
+- Add `bg_jobs raw` to recover unfiltered tee output by window id and/or `.out` path after Hypa compression. Model-facing results include an explicit recovery footer; session indexes raw paths so recovery works after auto-close.
+
+## 0.0.14
+
+### Minor Changes
+
+- Optional Hypa post-processing for model-facing bash/completion output (`modelOutputCompression: "hypa"`). Raw tee files remain for `bg_jobs peek` / mid-run poll. Strips outer `hypa -c` wrappers before tmux execution. Requires the `hypa` binary only; `pi-hypa` is not required.
+
 ## 0.0.13
 
 ### Patch Changes

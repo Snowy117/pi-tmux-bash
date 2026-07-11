@@ -22,19 +22,26 @@ const DEFAULT_TMUX_SYSTEM_PROMPT_SNIPPET =
 const DEFAULT_BASH_TOOL_DESCRIPTION =
   'Execute a bash command in a background window. Output is truncated to last {{bashContextLines}} lines or {{maxOutputKb}}KB. Defaults to a {{defaultTimeoutSeconds}}s timeout, max {{maxTimeoutSeconds}}s; timeoutAction defaults to "{{defaultTimeoutAction}}". Use background for long-running commands.';
 const DEFAULT_TMUX_TOOL_DESCRIPTION =
-  "Inspect and control background jobs created by bash. Peek output is compact by default.";
+  "Inspect and control background jobs created by bash. Peek output is compact by default. Use action raw to load unfiltered tee output by window id or .out path.";
 const DEFAULT_PEEK_EXPANDED_DISPLAY_LINES = 50;
+
+export const MODEL_OUTPUT_COMPRESSION_MODES = ["off", "hypa"] as const;
+export type ModelOutputCompression = (typeof MODEL_OUTPUT_COMPRESSION_MODES)[number];
+
+export const HYPA_COMPRESS_KINDS = ["shell-output", "log", "code", "generic"] as const;
+export type HypaCompressKind = (typeof HYPA_COMPRESS_KINDS)[number];
 
 export const TMUX_ACTIONS = [
   "list",
   "peek",
+  "raw",
   "kill",
   "poll",
   "unpoll",
   "list-polls",
   "wait",
 ] as const;
-const DEFAULT_TMUX_ENABLED_ACTIONS = ["list", "peek", "kill", "wait"] as const;
+const DEFAULT_TMUX_ENABLED_ACTIONS = ["list", "peek", "raw", "kill", "wait"] as const;
 
 const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
   'Use {{bashToolName}} with background: true or timeoutAction: "background" for long-running commands, servers, watchers, REPLs, interactive prompts, and background bash commands.',
@@ -44,6 +51,10 @@ const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
   "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live.",
   "If a background command's completion is missing, its full output is saved in a .out file under {{outputDir}}; recover it with `find {{outputDir}} -name '*.out'` then read.",
   "Use {{tmuxToolName}} wait to block the current turn until a background window finishes. It waits up to {{maxTimeoutSeconds}}s; if the task finishes in time, its result is delivered automatically as a follow-up — no need to peek or poll.",
+];
+
+const DEFAULT_HYPA_RAW_RECOVERY_GUIDELINES = [
+  "When bash/completion output includes a raw .out path (or looks over-compressed/missing details), recover unfiltered output with {{tmuxToolName}} raw (window id and/or path) or the read tool on that path — do not re-run non-idempotent commands.",
 ];
 
 const promptTemplateVariables = [
@@ -84,6 +95,8 @@ const promptTemplateSchema = templatedString({
 const promptToolEntrySchema = z.union([promptTemplateSchema, z.literal(false)]);
 const promptGuidelinesSchema = z.array(promptTemplateSchema);
 const tmuxActionSchema = z.enum(TMUX_ACTIONS);
+const modelOutputCompressionSchema = z.enum(MODEL_OUTPUT_COMPRESSION_MODES);
+const hypaCompressKindSchema = z.enum(HYPA_COMPRESS_KINDS);
 const tmuxWindowNameTemplateSchema = templatedString({
   variables: ["command", "name", "nameOrCommand"],
   missing: "keep",
@@ -146,11 +159,20 @@ const buildTmuxBashOptionsSchema = () =>
       minimumPollIntervalSeconds: positiveIntegerSchema.default(10),
       displayCommandStartMarker: z.string().default("# SHIM_END"),
       maxOutputBytes: positiveIntegerSchema.default(DEFAULT_MAX_BYTES),
+      modelOutputCompression: modelOutputCompressionSchema.default("off"),
+      hypaBinary: nonEmptyStringSchema.default("hypa"),
+      hypaCompressKind: hypaCompressKindSchema.default("shell-output"),
+      hypaCompressMaxTokens: z.number().int().nonnegative().default(2000),
+      hypaCompressTimeoutMs: positiveIntegerSchema.default(15_000),
+      hypaCompressMinBytes: z.number().int().nonnegative().default(2048),
+      hypaCompressShowRawPath: z.boolean().default(true),
+      unwrapHypaCommandWrapper: z.boolean().default(true),
       systemPrompt: z.boolean().default(true),
       bashSystemPromptSnippet: promptToolEntrySchema.default(DEFAULT_BASH_SYSTEM_PROMPT_SNIPPET),
       tmuxSystemPromptSnippet: promptToolEntrySchema.default(DEFAULT_TMUX_SYSTEM_PROMPT_SNIPPET),
       systemPromptGuidelines: promptGuidelinesSchema.default(() => [
         ...DEFAULT_SYSTEM_PROMPT_GUIDELINES,
+        ...DEFAULT_HYPA_RAW_RECOVERY_GUIDELINES,
       ]),
     })
     .refine(timeoutOrderIsValid, {

@@ -86,6 +86,18 @@ The `tmux` tool allows the model to inspect running bash processes.
 { "action": "peek", "window": "@123" }
 ```
 
+### Load unfiltered tee output (after Hypa compression or when details look missing).
+
+Works with a live/finished window id (session-indexed) and/or an absolute `.out` path under `outputDir`:
+
+```jsonc
+{ "action": "raw", "window": "@123" }
+{ "action": "raw", "path": "/tmp/pi-bg-jobs/.../....out" }
+{ "action": "raw", "window": "@123", "path": "/tmp/pi-bg-jobs/.../....out" }
+```
+
+Prefer this (or the `read` tool on the path) over re-running non-idempotent commands.
+
 ### Kill one window by stable tmux `#{window_id}`.
 
 ```jsonc
@@ -157,7 +169,7 @@ Default config settings:
   "tmuxToolName": "bg_jobs",
 
   // Tmux actions exposed to the agent. Set [] to disable registering the tmux tool.
-  "tmuxEnabledActions": ["list", "peek", "kill", "wait"],
+  "tmuxEnabledActions": ["list", "peek", "raw", "kill", "wait"],
 
   // Whether bash exposes pollInterval/pollLines and can start polling from a bash call.
   "bashPollIntervalEnabled": false,
@@ -174,7 +186,7 @@ Default config settings:
 
   // Tmux tool description sent to the model tool schema.
   // Supports the same template variables as systemPromptGuidelines below.
-  "tmuxToolDescription": "Inspect and control background jobs created by bash.",
+  "tmuxToolDescription": "Inspect and control background jobs created by bash. Peek output is compact by default. Use action raw to load unfiltered tee output by window id or .out path.",
 
   // modify Pi's built-in system prompt.
   "systemPrompt": true,
@@ -192,7 +204,9 @@ Default config settings:
     "Use {{tmuxToolName}} list to find background windows",
     "Use {{tmuxToolName}} peek/kill with a stable #{window_id} like @123.",
     "If asked, tell the user the background window id (e.g. @123) and they will know how to view it live.",
-    "If a background command's completion is missing, its full output is saved in a .out file under {{outputDir}}; recover it with `find {{outputDir}} -name '*.out'` then read."
+    "If a background command's completion is missing, its full output is saved in a .out file under {{outputDir}}; recover it with `find {{outputDir}} -name '*.out'` then read.",
+    "Use {{tmuxToolName}} wait to block the current turn until a background window finishes. It waits up to {{maxTimeoutSeconds}}s; if the task finishes in time, its result is delivered automatically as a follow-up — no need to peek or poll.",
+    "When bash/completion output includes a raw .out path (or looks over-compressed/missing details), recover unfiltered output with {{tmuxToolName}} raw (window id and/or path) or the read tool on that path — do not re-run non-idempotent commands."
   ],
 
   // ─────────────────────────────────────────────────────────────
@@ -246,6 +260,21 @@ Default config settings:
 
   // Maximum output bytes kept for model context and TUI cards.
   "maxOutputBytes": 51200,
+
+  // ─────────────────────────────────────────────────────────────
+  // Model output compression (Hypa)
+  // ─────────────────────────────────────────────────────────────
+  // Compress model-facing bash/completion results with `hypa compress`.
+  // bg_jobs peek and mid-run poll always read the raw tee file.
+  // Requires the `hypa` binary only (pi-hypa extension is not required).
+  "modelOutputCompression": "off", // "off" (default) | "hypa"
+  "hypaBinary": "hypa",
+  "hypaCompressKind": "shell-output", // "shell-output" | "log" | "code" | "generic"
+  "hypaCompressMaxTokens": 2000, // 0 disables --max-tokens
+  "hypaCompressTimeoutMs": 15000,
+  "hypaCompressMinBytes": 2048, // skip hypa for smaller raw outputs
+  "hypaCompressShowRawPath": true, // append compact [raw output: path window=@id] footer
+  "unwrapHypaCommandWrapper": true, // strip outer `hypa -c "..."` before tmux execution
 
   // Foreground bash output lines sent to model context.
   "bashContextLines": 2000,
@@ -383,6 +412,32 @@ ctx.ui.setFooter((_tui, theme, footerData) => ({
 ```
 
 The status key is `backgroundBashTmuxCommands`. Status values are strings; tmux-bash clears the status when there are no active background windows.
+
+## Model output compression (Hypa)
+
+Optional post-processing for **model-facing** bash results and background completion messages. `bg_jobs peek` and mid-run poll always read the raw tee file.
+
+1. Install the `hypa` binary (the `pi-hypa` extension is **not** required).
+2. Enable in `~/.pi/agent/tmux-bash.jsonc`:
+
+```jsonc
+{
+  "modelOutputCompression": "hypa",
+  "hypaBinary": "hypa",
+  "hypaCompressMinBytes": 2048,
+  "unwrapHypaCommandWrapper": true
+}
+```
+
+When enabled, finished command output is passed through `hypa compress --file <raw.out>`. Failures fall back to the usual truncated raw output. Outer `hypa -c "..."` wrappers (e.g. from a rewrite hook) are stripped before tmux execution so long-running jobs keep a live raw log for peek.
+
+If compressed output looks wrong or incomplete, recover the unfiltered tee file without re-running the command:
+
+- Footer looks like `[raw output: /tmp/.../file.out window=@123]`
+- Call `{ "action": "raw", "window": "@123" }` or `{ "action": "raw", "path": "/…/file.out" }`
+- Or use the `read` tool on that `.out` path
+
+Keep `preserveOutputFiles: true` (default) so paths remain after the session cleans scripts.
 
 ## Credits
 
