@@ -74,12 +74,11 @@ export async function formatOutputForModel({
   });
 
   if (!compressResult.ok) {
-    const failed = baseFormat(rawText, true);
+    const failed = baseFormat(rawText, options.alwaysShowOutputFilePath);
     const withHint = appendRawRecoveryHint(failed.text, rawFilePath, options, windowId);
     return withHint === failed.text ? failed : { ...failed, text: withHint };
   }
 
   const withHint = appendRawRecoveryHint(compressResult.text, rawFilePath, options, windowId);
-
-  return baseFormat(withHint, options.hypaCompressShowRawPath || options.alwaysShowOutputFilePath);
+  return baseFormat(withHint, options.alwaysShowOutputFilePath);
 }

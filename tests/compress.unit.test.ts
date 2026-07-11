@@ -172,6 +172,7 @@ describe("formatOutputForModel", () => {
     });
     expect(output.text).toContain("COMPRESSED");
     expect(output.text).toContain(`[raw output: ${path} window=@9]`);
+    expect(output.text).not.toContain("[Full output:");
   });
 
   it("falls back to raw when hypa fails", async () => {
