@@ -351,7 +351,10 @@ describe("tmux-bash TUI rendering", () => {
 
     expect(result.pane).toContain("$ printf starting && sleep 5 (timeout 1s)");
     expect(result.pane).toContain(
-      "Still running after 1s in background tmux. Use tmux peek/list/kill to inspect or stop it. Result will be reported when it finishes.",
+      "Still running after 1s in background tmux as window ",
+    );
+    expect(result.pane).toContain(
+      ". Use tmux peek/list/kill to inspect or stop it. Result will be reported when it finishes.",
     );
     expect(result.pane).not.toContain("Took 1s");
     expect(result.pane).not.toContain("$ printf starting && sleep 5 (background)");

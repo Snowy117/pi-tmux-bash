@@ -1423,7 +1423,7 @@ export const runBashInTmux = async (
         piSessionId,
         commandRun,
       );
-    const timeoutText = `Still running after ${params.timeout}s in the background${requestedPollInterval > 0 ? ` and polling every ${pollInterval}s` : ""}. ${timeoutBackgroundHint(options)}`;
+    const timeoutText = `Still running after ${params.timeout}s in the background as window ${result.windowId}${requestedPollInterval > 0 ? ` and polling every ${pollInterval}s` : ""}. ${timeoutBackgroundHint(options)}`;
     return {
       content: [
         {
