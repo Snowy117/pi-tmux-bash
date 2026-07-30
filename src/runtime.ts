@@ -8,10 +8,14 @@ import { sleep } from "@richardgill/lib";
 import { randomBytes } from "node:crypto";
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  readSync,
   rmSync,
   unlinkSync,
   watch,
@@ -70,6 +74,8 @@ const hypaExecFromPi =
 
 const formatModelFacingOutput = async (args: {
   rawText: string;
+  rawSourceBytes?: number;
+  rawSourceTruncated?: boolean;
   rawFilePath?: string;
   options: ResolvedOptions;
   contextLines: number;
@@ -82,6 +88,8 @@ const formatModelFacingOutput = async (args: {
   }
   return formatOutputForModel({
     rawText: args.rawText,
+    rawSourceBytes: args.rawSourceBytes,
+    rawSourceTruncated: args.rawSourceTruncated,
     rawFilePath: args.rawFilePath,
     options: args.options,
     contextLines: args.contextLines,
@@ -230,11 +238,19 @@ const emitForegroundBashOutputUpdate = (
 ): string | undefined => {
   if (!onUpdate) return lastText;
 
+  const rawOutput = commandOutputTail(
+    windowId,
+    options.bashContextLines,
+    options,
+    outputFile,
+  );
   const output = formatOutput(
-    commandOutputTail(windowId, options.bashContextLines, options, outputFile),
+    rawOutput.text,
     {
       fullOutputPath: outputFile,
       showFullOutputPath: options.alwaysShowOutputFilePath,
+      sourceBytes: rawOutput.sourceBytes,
+      sourceTruncated: rawOutput.sourceTruncated,
       truncationOptions: {
         maxLines: options.bashContextLines,
         maxBytes: options.maxOutputBytes,
@@ -269,9 +285,99 @@ const exitCodeFilename = ({ session, windowId, id }: CommandRunInfo): string =>
 const outputFileForRun = (runDir: string, commandRun: CommandRunInfo): string =>
   join(runDir, `${exitCodeFilename(commandRun)}.out`);
 
-const readOutputFile = (outputFile: string | undefined): string | null => {
+export type OutputFileTail = {
+  text: string;
+  sourceBytes: number;
+  sourceTruncated: boolean;
+};
+
+// Keep synchronous refreshes cheap and, more importantly, safely below V8's maximum string
+// length even if maxOutputBytes is configured to an unexpectedly large value.
+const MAX_OUTPUT_FILE_READ_BYTES = 1024 * 1024;
+const UTF8_MAX_BYTES = 4;
+
+const firstCompleteUtf8Byte = (buffer: Buffer): number => {
+  let offset = 0;
+  while (offset < buffer.length && (buffer[offset]! & 0xc0) === 0x80) offset += 1;
+  return offset;
+};
+
+const completeUtf8End = (buffer: Buffer): number => {
+  if (buffer.length === 0) return 0;
+
+  let lead = buffer.length - 1;
+  while (lead >= 0 && (buffer[lead]! & 0xc0) === 0x80) lead -= 1;
+  if (lead < 0) return 0;
+
+  const leadByte = buffer[lead]!;
+  const expectedBytes =
+    leadByte <= 0x7f
+      ? 1
+      : leadByte >= 0xc2 && leadByte <= 0xdf
+        ? 2
+        : leadByte >= 0xe0 && leadByte <= 0xef
+          ? 3
+          : leadByte >= 0xf0 && leadByte <= 0xf4
+            ? 4
+            : 1;
+  return buffer.length - lead < expectedBytes ? lead : buffer.length;
+};
+
+export const readOutputFileTail = (
+  outputFile: string | undefined,
+  maxBytes: number,
+): OutputFileTail | null => {
   if (!outputFile || !existsSync(outputFile)) return null;
-  return readFileSync(outputFile, "utf-8");
+
+  let file: number;
+  try {
+    file = openSync(outputFile, "r");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  try {
+    let sourceBytes = fstatSync(file).size;
+    const requestedBytes =
+      sourceBytes <= MAX_OUTPUT_FILE_READ_BYTES
+        ? sourceBytes
+        : Math.min(Math.max(1, Math.floor(maxBytes)), MAX_OUTPUT_FILE_READ_BYTES);
+    // Read a few extra bytes so the formatter can still apply the exact requested byte limit
+    // after we move past a partial UTF-8 sequence at the beginning of the tail.
+    for (let attempt = 0; ; attempt += 1) {
+      const bytesToRead = Math.min(sourceBytes, requestedBytes + UTF8_MAX_BYTES - 1);
+      const position = Math.max(0, sourceBytes - bytesToRead);
+      const buffer = Buffer.allocUnsafe(bytesToRead);
+      let bytesRead = 0;
+
+      while (bytesRead < bytesToRead) {
+        const count = readSync(
+          file,
+          buffer,
+          bytesRead,
+          bytesToRead - bytesRead,
+          position + bytesRead,
+        );
+        if (count === 0) break;
+        bytesRead += count;
+      }
+
+      if (bytesRead < bytesToRead && attempt === 0) {
+        sourceBytes = fstatSync(file).size;
+        continue;
+      }
+
+      const completeStart = position > 0 ? firstCompleteUtf8Byte(buffer.subarray(0, bytesRead)) : 0;
+      const completeEnd = completeUtf8End(buffer.subarray(completeStart, bytesRead)) + completeStart;
+      return {
+        text: buffer.subarray(completeStart, completeEnd).toString("utf-8"),
+        sourceBytes,
+        sourceTruncated: position + completeStart > 0,
+      };
+    }
+  } finally {
+    closeSync(file);
+  }
 };
 
 const tmuxCommand = (options: ResolvedOptions): string => shellQuote(options.tmuxBinary);
@@ -439,11 +545,12 @@ const commandOutputTail = (
   lines: number,
   options: ResolvedOptions,
   outputFile?: string,
-): string => {
-  const fileOutput = readOutputFile(outputFile);
+): OutputFileTail => {
+  const fileOutput = readOutputFileTail(outputFile, options.maxOutputBytes);
   if (fileOutput !== null) return fileOutput;
 
-  return captureWindowOutput(windowId, lines, options);
+  const text = captureWindowOutput(windowId, lines, options);
+  return { text, sourceBytes: Buffer.byteLength(text, "utf-8"), sourceTruncated: false };
 };
 
 const isBashCreatedWindow = (window: TmuxWindow): boolean =>
@@ -455,20 +562,29 @@ const getBashCreatedWindows = (
   filters: TmuxWindowFilters = {},
 ): TmuxWindow[] => getWindows(session, filters, options.tmuxBinary).filter(isBashCreatedWindow);
 
-const bashWindowOutput = (window: TmuxWindow): string => readOutputFile(window.outputFile) ?? "";
+const bashWindowOutput = (window: TmuxWindow, options: ResolvedOptions): OutputFileTail =>
+  readOutputFileTail(window.outputFile, options.maxOutputBytes) ?? {
+    text: "",
+    sourceBytes: 0,
+    sourceTruncated: false,
+  };
 
 const formatBashWindowOutput = (
   window: TmuxWindow,
   options: ResolvedOptions,
   contextLines: number,
-): FormattedOutput =>
-  formatOutput(bashWindowOutput(window), {
+): FormattedOutput => {
+  const rawOutput = bashWindowOutput(window, options);
+  return formatOutput(rawOutput.text, {
     fullOutputPath: window.outputFile,
+    sourceBytes: rawOutput.sourceBytes,
+    sourceTruncated: rawOutput.sourceTruncated,
     truncationOptions: {
       maxLines: contextLines,
       maxBytes: options.maxOutputBytes,
     },
   });
+};
 
 const bashWindowDisplayLines = (
   window: TmuxWindow,
@@ -725,9 +841,14 @@ const startPoller = (
     const completed = exitCode !== undefined;
     const outputFile = commandRun?.outputFile ?? window.outputFile;
     const outputLines = completed ? options.completedContextLines : lines;
-    const output = completed
+    const completedRawOutput = completed
+      ? commandOutputTail(windowId, outputLines, options, outputFile)
+      : undefined;
+    const output = completedRawOutput
       ? await formatModelFacingOutput({
-          rawText: commandOutputTail(windowId, outputLines, options, outputFile),
+          rawText: completedRawOutput.text,
+          rawSourceBytes: completedRawOutput.sourceBytes,
+          rawSourceTruncated: completedRawOutput.sourceTruncated,
           rawFilePath: outputFile,
           options,
           contextLines: outputLines,
@@ -782,14 +903,22 @@ const handleCompletedExitCodeFile = async (
   unlinkSync(exitCodeFilePath);
 
   const outputFile = `${exitCodeFilePath}.out`;
-  const fileOutput = readOutputFile(outputFile);
-  const rawOutput =
-    fileOutput ??
-    execSafe(
-      `${tmuxCommand(options)} capture-pane -t ${shellQuote(parsed.windowId)} -p -S -${options.completedContextLines}`,
-    );
+  const fileOutput = readOutputFileTail(outputFile, options.maxOutputBytes);
+  const fallbackOutput =
+    fileOutput === null
+      ? (execSafe(
+          `${tmuxCommand(options)} capture-pane -t ${shellQuote(parsed.windowId)} -p -S -${options.completedContextLines}`,
+        ) ?? "")
+      : "";
+  const rawOutput = fileOutput ?? {
+    text: fallbackOutput,
+    sourceBytes: Buffer.byteLength(fallbackOutput, "utf-8"),
+    sourceTruncated: false,
+  };
   const output = await formatModelFacingOutput({
-    rawText: rawOutput ?? "",
+    rawText: rawOutput.text,
+    rawSourceBytes: rawOutput.sourceBytes,
+    rawSourceTruncated: rawOutput.sourceTruncated,
     rawFilePath: fileOutput === null ? undefined : outputFile,
     options,
     contextLines: options.completedContextLines,
@@ -1063,10 +1192,16 @@ const rawAction = (
 
   if (params.window) state.rawOutputByWindowId.set(params.window, resolved);
 
-  const rawText = readOutputFile(resolved) ?? "";
-  const output = formatOutput(rawText, {
+  const rawOutput = readOutputFileTail(resolved, options.maxOutputBytes) ?? {
+    text: "",
+    sourceBytes: 0,
+    sourceTruncated: false,
+  };
+  const output = formatOutput(rawOutput.text, {
     fullOutputPath: resolved,
     showFullOutputPath: true,
+    sourceBytes: rawOutput.sourceBytes,
+    sourceTruncated: rawOutput.sourceTruncated,
     truncationOptions: {
       maxLines: options.peekContextLines,
       maxBytes: options.maxOutputBytes,
@@ -1378,14 +1513,16 @@ export const runBashInTmux = async (
   if (exitCode !== "timeout" || params.timeoutAction !== "background") {
     state.ownedExitCodeFiles.delete(completionExitCodeFilename);
   }
-  const rawText = commandOutputTail(
+  const rawOutput = commandOutputTail(
     result.windowId,
     options.bashContextLines,
     options,
     result.outputFile,
   );
   const output = await formatModelFacingOutput({
-    rawText,
+    rawText: rawOutput.text,
+    rawSourceBytes: rawOutput.sourceBytes,
+    rawSourceTruncated: rawOutput.sourceTruncated,
     rawFilePath: result.outputFile,
     options,
     contextLines: options.bashContextLines,

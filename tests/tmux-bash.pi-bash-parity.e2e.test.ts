@@ -60,7 +60,7 @@ const runTui = async (
 ): Promise<string> => {
   const scriptedProvider = writeScriptedProvider(workspace.tempRoot, script);
   const extensions = options.tmuxBash
-    ? [path.resolve("extensions/tmux-bash/src/index.ts"), scriptedProvider]
+    ? [path.resolve("src/index.ts"), scriptedProvider]
     : [scriptedProvider];
   const result = await runPiTui({
     cwd: workspace.projectDir,

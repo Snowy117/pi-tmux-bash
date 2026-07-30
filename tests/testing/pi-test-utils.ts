@@ -69,7 +69,7 @@ const tmuxSessionNameForWorkspace = (workspace: PiTestWorkspace): string => {
 
 const extensionsForWorkspace = (workspace: PiTestWorkspace, script: ScriptedStep[]): string[] => {
   const scriptedProvider = writeScriptedProvider(workspace.tempRoot, script);
-  return [path.resolve("extensions/tmux-bash/src/index.ts"), scriptedProvider];
+  return [path.resolve("src/index.ts"), scriptedProvider];
 };
 
 const runPiForWorkspace = (

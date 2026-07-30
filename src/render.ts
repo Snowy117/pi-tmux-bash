@@ -36,6 +36,8 @@ export type BashOutputRenderDetails = {
 
 export type TmuxBashToolDetails = BashToolDetails & {
   outcome?: "timed-out-background";
+  sourceBytes?: number;
+  sourceTruncated?: boolean;
   render: BashOutputRenderDetails;
 };
 
@@ -55,6 +57,8 @@ type FormatTmuxOutputOptions = {
   fullOutputPath?: string;
   emptyText?: string;
   showFullOutputPath?: boolean;
+  sourceBytes?: number;
+  sourceTruncated?: boolean;
   truncationOptions?: TruncationOptions;
 };
 
@@ -200,12 +204,20 @@ const truncationNotice = (
   return `[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit)${suffix}]`;
 };
 
+const sourceTailNotice = (sourceBytes: number | undefined, fullOutputPath: string | undefined) => {
+  const size = sourceBytes === undefined ? "" : ` of ${formatSize(sourceBytes)} output`;
+  const suffix = fullOutputPath ? `. Full output: ${fullOutputPath}` : "";
+  return `[Showing tail${size}${suffix}]`;
+};
+
 export const formatTmuxOutputForContext = (
   content: string,
   {
     fullOutputPath,
     emptyText = "(no output)",
     showFullOutputPath = false,
+    sourceBytes,
+    sourceTruncated = false,
     truncationOptions = {},
   }: FormatTmuxOutputOptions = {},
 ): FormattedOutput => {
@@ -218,7 +230,9 @@ export const formatTmuxOutputForContext = (
   const truncationInput = useRawSingleOversizedLine || useRawLineTruncation ? content : text;
   const truncation = truncateTail(truncationInput, truncationOptions);
   const output = truncation.truncated ? truncation.content || emptyText : text;
-  const notice: BashOutputRenderLine | undefined = truncation.truncated
+  const notice: BashOutputRenderLine | undefined = sourceTruncated
+    ? { kind: "truncationNotice", text: sourceTailNotice(sourceBytes, fullOutputPath) }
+    : truncation.truncated
     ? {
         kind: "truncationNotice",
         text: truncationNotice(truncationInput, truncation, fullOutputPath),
@@ -231,8 +245,9 @@ export const formatTmuxOutputForContext = (
   return {
     text: notice ? `${output}\n\n${notice.text}` : output,
     details: {
-      ...(truncation.truncated ? { truncation, fullOutputPath } : {}),
+      ...(!sourceTruncated && truncation.truncated ? { truncation, fullOutputPath } : {}),
       ...(!truncation.truncated && notice ? { fullOutputPath } : {}),
+      ...(sourceTruncated ? { fullOutputPath, sourceBytes, sourceTruncated } : {}),
       render: { lines: notice ? [...render.lines, notice] : render.lines, empty: render.empty },
     },
   };
@@ -503,8 +518,8 @@ const stripFinalTruncationFooter = (
   isPartial: boolean,
 ): string => {
   if (
-    isPartial ||
-    !details?.truncation?.truncated ||
+    (isPartial && !details?.sourceTruncated) ||
+    (!details?.truncation?.truncated && !details?.sourceTruncated) ||
     !details.fullOutputPath ||
     !output.endsWith("]")
   ) {

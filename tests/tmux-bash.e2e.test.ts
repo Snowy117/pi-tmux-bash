@@ -365,9 +365,9 @@ const backgroundCommandCases: TmuxBashE2eTestCase[] = [
     name: "background command returns immediately and leaves session running",
     steps: [
       bash("sleep 30", { background: true, name: "server" }),
-      scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+      scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
     ],
-    captureTool: "tmux",
+    captureTool: "bg_jobs",
     expectedModelTextIncludes: ["Background session", "1 window(s)", "server"],
     expectedTmuxSessionExists: true,
   },
@@ -375,9 +375,9 @@ const backgroundCommandCases: TmuxBashE2eTestCase[] = [
     name: "lists background tmux windows",
     steps: [
       bash("sleep 30", { background: true, name: "worker" }),
-      scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+      scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
     ],
-    captureTool: "tmux",
+    captureTool: "bg_jobs",
     expectedModelTextIncludes: ["Background session", "1 window(s)", "worker"],
     expectedTmuxSessionExists: true,
   },
@@ -388,9 +388,9 @@ const backgroundCommandCases: TmuxBashE2eTestCase[] = [
         background: true,
         name: "peek-test",
       }),
-      scriptedToolCallWithLatestWindowId("tmux", { action: "peek" }, { delayMs: 500 }),
+      scriptedToolCallWithLatestWindowId("bg_jobs", { action: "peek" }, { delayMs: 500 }),
     ],
-    captureTool: "tmux",
+    captureTool: "bg_jobs",
     expectedModelText: peekContextOutput,
     expectedOutputFileContent: "peek-me\n",
     expectedTmuxSessionExists: true,
@@ -402,9 +402,9 @@ const backgroundCommandCases: TmuxBashE2eTestCase[] = [
         background: true,
         name: "peek-compact",
       }),
-      scriptedToolCallWithLatestWindowId("tmux", { action: "peek" }, { delayMs: 500 }),
+      scriptedToolCallWithLatestWindowId("bg_jobs", { action: "peek" }, { delayMs: 500 }),
     ],
-    captureTool: "tmux",
+    captureTool: "bg_jobs",
     expectedModelText: compactPeekContextOutput,
     expectedOutputFileContent:
       "peek-compact-1\npeek-compact-2\npeek-compact-3\npeek-compact-4\npeek-compact-5\npeek-compact-6\npeek-compact-7\npeek-compact-8\n",
@@ -585,10 +585,10 @@ describe("tmux-bash e2e", () => {
     const result = await workspace.run({
       script: [
         bash("sleep 30", { background: true, name: "custom-global" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "custom-global-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],
@@ -627,10 +627,10 @@ describe("tmux-bash e2e", () => {
     const result = await workspace.run({
       script: [
         bash("sleep 30", { background: true, name: "named" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "custom-window-name-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],
@@ -652,10 +652,10 @@ describe("tmux-bash e2e", () => {
     const result = await workspace.run({
       script: [
         bash("sleep 30", { background: true, name: "own" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "default-window-scope-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],
@@ -680,10 +680,10 @@ describe("tmux-bash e2e", () => {
 
     const result = await workspace.run({
       script: [
-        scriptedToolCall("tmux", { action: "kill", window: windowId }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "kill", window: windowId }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "kill-window-id",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "killed",
         }),
       ],
@@ -708,10 +708,10 @@ describe("tmux-bash e2e", () => {
 
     const result = await workspace.run({
       script: [
-        scriptedToolCall("tmux", { action: "kill", window: windowId }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "kill", window: windowId }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "default-window-scope-kill",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "not-killed",
         }),
       ],
@@ -736,10 +736,10 @@ describe("tmux-bash e2e", () => {
     const result = await workspace.run({
       script: [
         bash("sleep 30", { background: true, name: "own-git-root" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "git-root-window-scope-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],
@@ -760,10 +760,10 @@ describe("tmux-bash e2e", () => {
     const result = await workspace.run({
       script: [
         bash("sleep 30", { background: true, name: "own-all" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(workspace, {
           outputName: "all-window-scope-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],
@@ -785,10 +785,10 @@ describe("tmux-bash e2e", () => {
     const gitRootResult = await gitRootScoped.run({
       script: [
         bash("sleep 30", { background: true, name: "own-git-root-scope" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(gitRootScoped, {
           outputName: "git-root-scope-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],
@@ -801,10 +801,10 @@ describe("tmux-bash e2e", () => {
     const allResult = await allScoped.run({
       script: [
         bash("sleep 30", { background: true, name: "own-all-scope" }),
-        scriptedToolCall("tmux", { action: "list" }, { delayMs: 500 }),
+        scriptedToolCall("bg_jobs", { action: "list" }, { delayMs: 500 }),
         captureLatestToolResult(allScoped, {
           outputName: "all-scope-list",
-          toolName: "tmux",
+          toolName: "bg_jobs",
           assistantReply: "listed",
         }),
       ],

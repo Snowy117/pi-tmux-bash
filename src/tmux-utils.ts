@@ -52,6 +52,7 @@ export const getGitRoot = (cwd: string): string | null => {
       cwd,
       encoding: "utf-8",
       timeout: 5000,
+      stdio: ["ignore", "pipe", "pipe"],
     }).trim();
   } catch {
     return null;

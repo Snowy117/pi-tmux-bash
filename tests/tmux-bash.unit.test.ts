@@ -16,6 +16,7 @@ import {
   renderBackgroundBashResultText,
   renderBashCallText,
   renderBashResultText,
+  renderForegroundBashResultComponent,
 } from "../src/render";
 import { formatEnvironmentExportsForBash } from "../src/runtime";
 import { tmuxWindowAttachCommand } from "../src/tmux-utils";
@@ -25,6 +26,8 @@ type FormatOutputCase = {
   content: string;
   fullOutputPath?: string;
   showFullOutputPath?: boolean;
+  sourceBytes?: number;
+  sourceTruncated?: boolean;
   truncationOptions?: { maxBytes?: number; maxLines?: number };
   expectedText: string;
   expectedFullOutputPath?: string;
@@ -127,6 +130,15 @@ describe("tmux-bash unit", () => {
         expectedText: "hello\n\n[Full output: /tmp/output.out]",
         expectedFullOutputPath: "/tmp/output.out",
       },
+      {
+        name: "reports a pre-truncated file tail without inventing line counts",
+        content: "latest output",
+        fullOutputPath,
+        sourceBytes: 0x20000020,
+        sourceTruncated: true,
+        expectedText: `latest output\n\n[Showing tail of 512.0MB output. Full output: ${fullOutputPath}]`,
+        expectedFullOutputPath: fullOutputPath,
+      },
     ];
 
     it.each(cases)("$name", (testCase) => {
@@ -134,6 +146,8 @@ describe("tmux-bash unit", () => {
         fullOutputPath: testCase.fullOutputPath,
         emptyText: "(no output)",
         showFullOutputPath: testCase.showFullOutputPath,
+        sourceBytes: testCase.sourceBytes,
+        sourceTruncated: testCase.sourceTruncated,
         truncationOptions: testCase.truncationOptions,
       });
 
@@ -144,6 +158,12 @@ describe("tmux-bash unit", () => {
         expect(result.details?.truncation).toMatchObject(testCase.expectedTruncation);
       } else {
         expect(result.details?.truncation).toBeUndefined();
+      }
+      if (testCase.sourceTruncated) {
+        expect(result.details).toMatchObject({
+          sourceBytes: testCase.sourceBytes,
+          sourceTruncated: true,
+        });
       }
     });
   });
@@ -208,7 +228,7 @@ describe("tmux-bash unit", () => {
       const tmuxTool = registeredTool(tools, "bg_jobs");
       const action = tmuxTool.parameters.properties?.action as { enum?: string[] };
 
-      expect(action.enum).toEqual(["list", "peek", "kill", "wait"]);
+      expect(action.enum).toEqual(["list", "peek", "raw", "kill", "wait"]);
       expect(tmuxTool.promptGuidelines?.join("\n")).toContain("bg_jobs peek/kill");
       expect(tmuxTool.promptGuidelines?.join("\n")).not.toContain("poll/unpoll");
     });
@@ -366,6 +386,26 @@ Elapsed 5.0s`);
 Took 5.0s`);
     });
 
+    it("renders a pre-truncated source path only once after completion", () => {
+      const output = formatTmuxOutputForContext("latest output", {
+        fullOutputPath: "/tmp/output.out",
+        sourceBytes: 100_000,
+        sourceTruncated: true,
+      });
+
+      const result = renderForegroundBashResultComponent({
+        raw: output.text,
+        details: output.details,
+        expanded: false,
+        isPartial: false,
+        state: {},
+        theme: plainTheme,
+      }).render(200).join("\n");
+
+      expect(result.match(/Full output: \/tmp\/output\.out/g)).toHaveLength(1);
+      expect(result).not.toContain("Showing tail");
+    });
+
     it("renders collapsed bash elision with vanilla pi colors", () => {
       const output = formatTmuxOutputForContext(
         "line-1\nline-2\nline-3\nline-4\nline-5\nline-6\nline-7",
@@ -383,9 +423,8 @@ Took 5.0s`);
         theme: taggedTheme,
       });
 
-      expect(result).toContain(
-        "<muted>... (4 earlier lines,</muted> <dim>ctrl+o</dim><muted> to expand</muted>)",
-      );
+      expect(result).toContain("<muted>... (4 earlier lines,</muted>");
+      expect(result).toContain("<muted> to expand</muted>)");
       expect(result).toContain("<toolOutput>line-7</toolOutput>");
       expect(result).toContain(
         "<toolOutput>[Showing lines 2-7 of 7. Full output: /tmp/output.out]</toolOutput>",

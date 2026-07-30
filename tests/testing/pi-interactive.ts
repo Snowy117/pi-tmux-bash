@@ -120,6 +120,8 @@ const sendPrompt = async (session: string, prompt: string, timeoutMs: number): P
   await waitForPane(session, prompt, timeoutMs);
   await sleep(300);
   tmux(["send-keys", "-t", session, "Enter"]);
+  await sleep(100);
+  tmux(["send-keys", "-t", session, "C-m"]);
 };
 
 const sendKeys = (session: string, keys: string[] | undefined): void => {

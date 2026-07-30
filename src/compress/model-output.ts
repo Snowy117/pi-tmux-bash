@@ -4,6 +4,8 @@ import { compressFileWithHypa, type HypaExecFn } from "./hypa-compress";
 
 export type FormatOutputForModelArgs = {
   rawText: string;
+  rawSourceBytes?: number;
+  rawSourceTruncated?: boolean;
   rawFilePath?: string;
   options: ResolvedOptions;
   contextLines: number;
@@ -39,6 +41,8 @@ const appendRawRecoveryHint = (
 
 export async function formatOutputForModel({
   rawText,
+  rawSourceBytes,
+  rawSourceTruncated = false,
   rawFilePath,
   options,
   contextLines,
@@ -46,11 +50,17 @@ export async function formatOutputForModel({
   emptyText = "(no output)",
   windowId,
 }: FormatOutputForModelArgs): Promise<FormattedOutput> {
-  const baseFormat = (content: string, showFullOutputPath = options.alwaysShowOutputFilePath) =>
+  const baseFormat = (
+    content: string,
+    showFullOutputPath = options.alwaysShowOutputFilePath,
+    sourceTruncated = rawSourceTruncated,
+  ) =>
     formatTmuxOutputForContext(content, {
       fullOutputPath: rawFilePath,
       emptyText,
       showFullOutputPath,
+      sourceBytes: rawSourceBytes,
+      sourceTruncated,
       truncationOptions: {
         maxLines: contextLines,
         maxBytes: options.maxOutputBytes,
@@ -61,7 +71,7 @@ export async function formatOutputForModel({
     return baseFormat(rawText);
   }
 
-  if (byteLength(rawText) < options.hypaCompressMinBytes || !rawFilePath) {
+  if ((rawSourceBytes ?? byteLength(rawText)) < options.hypaCompressMinBytes || !rawFilePath) {
     return baseFormat(rawText);
   }
 
@@ -80,5 +90,5 @@ export async function formatOutputForModel({
   }
 
   const withHint = appendRawRecoveryHint(compressResult.text, rawFilePath, options, windowId);
-  return baseFormat(withHint, options.alwaysShowOutputFilePath);
+  return baseFormat(withHint, options.alwaysShowOutputFilePath, false);
 }

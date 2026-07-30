@@ -175,6 +175,30 @@ describe("formatOutputForModel", () => {
     expect(output.text).not.toContain("[Full output:");
   });
 
+  it("uses the complete source size when the in-memory tail is small", async () => {
+    let called = false;
+    const path = writeRaw("complete source");
+    const output = await formatOutputForModel({
+      rawText: "tail",
+      rawSourceBytes: 5000,
+      rawSourceTruncated: true,
+      rawFilePath: path,
+      options: resolveOptions({
+        modelOutputCompression: "hypa",
+        hypaCompressMinBytes: 2048,
+      }),
+      contextLines: 2000,
+      exec: async () => {
+        called = true;
+        return { stdout: "SUMMARY\n\nDETAILS\nCOMPRESSED\n\nSTATS\n", stderr: "", code: 0 };
+      },
+    });
+
+    expect(called).toBe(true);
+    expect(output.text).toContain("COMPRESSED");
+    expect(output.text).not.toContain("Showing tail");
+  });
+
   it("falls back to raw when hypa fails", async () => {
     const raw = "z".repeat(3000);
     const path = writeRaw(raw);
