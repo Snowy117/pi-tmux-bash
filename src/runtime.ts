@@ -399,10 +399,16 @@ export const formatEnvironmentExportsForBash = (
     .join("\n");
 };
 
+// Configured env values are double-quoted so they can reference previously exported variables
+// (e.g. "PATH": "/custom/bin:$PATH"). Only backslashes and double quotes are escaped; $VAR,
+// $(...) and backticks expand at script runtime by design (the config is user-controlled).
+const shellDoubleQuote = (value: string): string =>
+  `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+
 export const formatConfiguredEnvExports = (env: Record<string, string>): string =>
   Object.entries(env)
     .filter(([name]) => SHELL_IDENTIFIER_REGEX.test(name))
-    .map(([name, value]) => `export ${name}=${shellQuote(value)}`)
+    .map(([name, value]) => `export ${name}=${shellDoubleQuote(value)}`)
     .join("\n");
 
 // The script tees exact output, writes an exit-code sentinel, then stays attachable as a login shell.
