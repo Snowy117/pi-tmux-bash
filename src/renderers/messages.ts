@@ -1,10 +1,12 @@
 import { Text } from "@earendil-works/pi-tui";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import type { ResolvedOptions } from "../config";
 import {
   formatRenderedCompletionMessage,
   formatRenderedPollMessage,
   indentDisplayLine,
+  resolveSanitizeOptions,
+  sanitizeForRender,
   type BashOutputRenderDetails,
   type BashOutputRenderLine,
   type CompletionMessageRenderDetails,
@@ -72,6 +74,21 @@ const pollMessageRenderDetails = (value: unknown): PollMessageRenderDetails | un
 };
 
 export const registerMessageRenderers = (pi: ExtensionAPI, options: ResolvedOptions): void => {
+  const sanitize = resolveSanitizeOptions(options);
+  const renderDetail = (detail: string[], theme: Pick<Theme, "fg">) =>
+    detail.length > 0
+      ? `\n${detail
+          .map((line) =>
+            sanitizeForRender(
+              line,
+              sanitize,
+              (text) => theme.fg("dim", text),
+              (text) => theme.fg("error", text),
+            ),
+          )
+          .join("\n")}`
+      : "";
+
   pi.registerMessageRenderer("tmux-bash-poll", (message, { expanded }, theme) => {
     const details = pollMessageRenderDetails(message.details);
     if (!details) throw new Error("Missing tmux-bash poll render details");
@@ -79,7 +96,7 @@ export const registerMessageRenderers = (pi: ExtensionAPI, options: ResolvedOpti
     const rendered = formatRenderedPollMessage({ details, expanded, options });
     const [summary = "", ...detail] = rendered.split("\n");
     return new Text(
-      `${theme.fg("success", indentDisplayLine(summary))}${detail.length > 0 ? `\n${theme.fg("dim", detail.join("\n"))}` : ""}`,
+      `${theme.fg("success", indentDisplayLine(summary))}${renderDetail(detail, theme)}`,
       0,
       0,
     );
@@ -93,7 +110,7 @@ export const registerMessageRenderers = (pi: ExtensionAPI, options: ResolvedOpti
     const [summary = "", ...detail] = rendered.split("\n");
     const summaryColor = details.status === "failed" ? "error" : "success";
     return new Text(
-      `${theme.fg(summaryColor, indentDisplayLine(summary))}${detail.length > 0 ? `\n${theme.fg("dim", detail.join("\n"))}` : ""}`,
+      `${theme.fg(summaryColor, indentDisplayLine(summary))}${renderDetail(detail, theme)}`,
       0,
       0,
     );

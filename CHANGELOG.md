@@ -9,6 +9,11 @@ This is a fork of `@richardgill/pi-tmux-bash`. Versions below `0.0.13` are inher
 - Removed hypa compression support (`modelOutputCompression`, `hypaBinary`, `hypaCompress*`, `unwrapHypaCommandWrapper` options and all related code).
 - Lowered minimum Node.js version from 24 to 22.
 
+### Minor Changes
+
+- The bash tool-call title now preserves real newlines and indentation from the LLM command instead of collapsing all whitespace into a single space. When collapsed, only the first `bashCommandCollapsedDisplayLines` lines (default 2) are shown followed by `...`; when expanded, the full multi-line command is shown.
+- Sanitize bash output before it reaches the terminal: complete ANSI escape sequences (CSI/OSC) are stripped, and any remaining unsafe characters (lone escape bytes, C0/C1 control bytes except tab/newline/CR, invalid UTF-8 replacement characters, and invisible Unicode such as BOM, zero-width, and bidi overrides) are replaced with a configurable fallback marker. The marker color and character are configurable via `controlCharFallback` (default `.`) and `controlCharFallbackColor` (default `error`).
+
 ## 0.0.15
 
 ### Minor Changes

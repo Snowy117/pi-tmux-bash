@@ -462,6 +462,22 @@ Took 5.0s`);
       expect(result).toBe(`$ ${command} (timeout 15s)`);
       expect(result).not.toContain("…");
     });
+
+    it("strips ANSI sequences and colors unsafe control bytes in rendered bash output", () => {
+      const formatted = formatTmuxOutputForContext("\x1b[31mred\x1b[0m\x07\nplain");
+      expect(formatted.text).toBe("red.\nplain");
+
+      const result = renderBashResultText({
+        raw: "\x1b[31mred\x1b[0m\x07\nplain",
+        details: formatted.details.render,
+        expanded: false,
+        isPartial: false,
+        state: {},
+        theme: taggedTheme,
+      });
+
+      expect(result).toBe("<toolOutput>red</toolOutput><error>.</error>\n<toolOutput>plain</toolOutput>");
+    });
   });
 
   describe("displayCommandForCommand", () => {

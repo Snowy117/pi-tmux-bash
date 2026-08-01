@@ -133,6 +133,11 @@ const buildTmuxBashOptionsSchema = () =>
       // Max lines of the command shown in the TUI tool-call title when collapsed.
       // When the command exceeds this many lines, only the first N lines are shown followed by "...".
       bashCommandCollapsedDisplayLines: positiveIntegerSchema.default(2),
+      // Replacement character shown in place of unsafe control bytes, lone escape introducers,
+      // and invisible Unicode (bidi overrides, zero-width, BOM) found in bash output.
+      controlCharFallback: z.string().min(1).default("."),
+      // Theme color name used for the control-character fallback marker.
+      controlCharFallbackColor: nonEmptyStringSchema.default("error"),
       bashCompactDisplayLines: positiveIntegerSchema.default(5),
       bashTruncatedCompactDisplayLines: positiveIntegerSchema.default(2),
       bashExpandedDisplayLines: positiveIntegerSchema.default(DEFAULT_MAX_LINES),

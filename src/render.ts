@@ -12,9 +12,17 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { BASH_DURATION_SEPARATOR, DEFAULT_OPTIONS, type ResolvedOptions } from "./config";
 import type { BashInput } from "./tool-call-schemas";
+import {
+  resolveSanitizeOptions,
+  sanitizeForRender,
+  sanitizePlainText,
+  type SanitizeOptions,
+} from "./sanitize";
+
+export { resolveSanitizeOptions, sanitizeForRender, sanitizePlainText, type SanitizeOptions };
 
 export type RenderTheme = {
-  fg: (name: "toolTitle" | "toolOutput" | "muted" | "dim" | "warning", text: string) => string;
+  fg: (name: "toolTitle" | "toolOutput" | "muted" | "dim" | "warning" | "error", text: string) => string;
   bold: (text: string) => string;
 };
 
@@ -60,6 +68,7 @@ type FormatTmuxOutputOptions = {
   sourceBytes?: number;
   sourceTruncated?: boolean;
   truncationOptions?: TruncationOptions;
+  sanitizeOptions?: SanitizeOptions;
 };
 
 type RenderBackgroundBashResultOptions = {
@@ -219,6 +228,7 @@ export const formatTmuxOutputForContext = (
     sourceBytes,
     sourceTruncated = false,
     truncationOptions = {},
+    sanitizeOptions = resolveSanitizeOptions(DEFAULT_OPTIONS),
   }: FormatTmuxOutputOptions = {},
 ): FormattedOutput => {
   const empty = !content.trim();
@@ -241,9 +251,13 @@ export const formatTmuxOutputForContext = (
       ? fullOutputNoticeLine(fullOutputPath)
       : undefined;
   const render = outputRenderDetails(output, empty);
+  const modelText = sanitizePlainText(
+    notice ? `${output}\n\n${notice.text}` : output,
+    sanitizeOptions,
+  );
 
   return {
-    text: notice ? `${output}\n\n${notice.text}` : output,
+    text: modelText,
     details: {
       ...(!sourceTruncated && truncation.truncated ? { truncation, fullOutputPath } : {}),
       ...(!truncation.truncated && notice ? { fullOutputPath } : {}),
@@ -445,7 +459,11 @@ export const formatRenderedBashResult = (
     .join("\n")
     .trimEnd();
 
-const renderBashOutputLine = (line: RenderedBashOutputLine, theme: RenderTheme): string => {
+const renderBashOutputLine = (
+  line: RenderedBashOutputLine,
+  theme: RenderTheme,
+  sanitize: SanitizeOptions,
+): string => {
   if (line.kind === "collapsedElision") {
     return (
       theme.fg("muted", line.prefix) +
@@ -455,11 +473,19 @@ const renderBashOutputLine = (line: RenderedBashOutputLine, theme: RenderTheme):
   if (line.kind === "expandedElision") return theme.fg("muted", line.text);
   if (line.kind === "fullOutputNotice") return theme.fg("warning", line.text);
 
-  return theme.fg("toolOutput", line.text);
+  return sanitizeForRender(
+    line.text,
+    sanitize,
+    (text) => theme.fg("toolOutput", text),
+    (text) => theme.fg("error", text),
+  );
 };
 
-const renderBashOutputLines = (lines: RenderedBashOutputLine[], theme: RenderTheme): string =>
-  lines.map((line) => renderBashOutputLine(line, theme)).join("\n");
+const renderBashOutputLines = (
+  lines: RenderedBashOutputLine[],
+  theme: RenderTheme,
+  sanitize: SanitizeOptions,
+): string => lines.map((line) => renderBashOutputLine(line, theme, sanitize)).join("\n");
 
 const durationSeconds = (ms: number): number => Math.max(0, ms / 1000);
 
@@ -528,7 +554,8 @@ export const renderBackgroundBashResultText = ({
   options = DEFAULT_OPTIONS,
 }: RenderBackgroundBashResultOptions): string => {
   const output = bashResultOutputLines(raw, details, expanded, options);
-  const renderedOutput = output.length > 0 ? renderBashOutputLines(output, theme) : "";
+  const renderedOutput =
+    output.length > 0 ? renderBashOutputLines(output, theme, resolveSanitizeOptions(options)) : "";
   return renderedOutput ? `\n${renderedOutput}` : "";
 };
 
@@ -543,7 +570,8 @@ export const renderBashResultText = ({
 }: RenderBashResultOptions): string => {
   const output = bashResultOutputLines(raw, details, expanded, options);
   const duration = bashDurationText(state, isPartial);
-  const renderedOutput = output.length > 0 ? renderBashOutputLines(output, theme) : "";
+  const renderedOutput =
+    output.length > 0 ? renderBashOutputLines(output, theme, resolveSanitizeOptions(options)) : "";
   const renderedDuration = duration ? theme.fg("muted", duration) : "";
 
   if (!renderedOutput) return isPartial ? `\n${renderedDuration}` : renderedDuration;
@@ -596,16 +624,25 @@ export const renderForegroundBashResultComponent = ({
   isPartial,
   state,
   theme,
+  options = DEFAULT_OPTIONS,
 }: RenderForegroundBashResultOptions): Component => {
   const component = new BashResultRenderComponent();
   const output = stripFinalTruncationFooter(raw.trim(), details, isPartial);
   const duration = bashDurationText(state, isPartial);
   const warning = foregroundWarningText(details);
+  const sanitize = resolveSanitizeOptions(options);
 
   if (output) {
     const styledOutput = output
       .split("\n")
-      .map((line) => theme.fg("toolOutput", line))
+      .map((line) =>
+        sanitizeForRender(
+          line,
+          sanitize,
+          (text) => theme.fg("toolOutput", text),
+          (text) => theme.fg("error", text),
+        ),
+      )
       .join("\n");
     component.addChild(
       expanded

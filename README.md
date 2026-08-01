@@ -267,6 +267,17 @@ Default config settings:
   // Max characters of the command shown in the TUI tool-call title. Set to 0 to show the full command.
   "bashCommandDisplayLength": 80,
 
+  // Max lines of the command shown in the TUI tool-call title when collapsed. When the command
+  // exceeds this many lines, only the first N lines are shown followed by "...".
+  "bashCommandCollapsedDisplayLines": 2,
+
+  // Replacement character shown in place of unsafe control bytes, lone escape introducers,
+  // and invisible Unicode (bidi overrides, zero-width, BOM) found in bash output.
+  "controlCharFallback": ".",
+
+  // Theme color name used for the control-character fallback marker.
+  "controlCharFallbackColor": "error",
+
   // Completed background command lines sent to model context.
   "completedContextLines": 20,
 
