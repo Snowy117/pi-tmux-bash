@@ -16,6 +16,14 @@ const DEFAULT_TMUX_ENV_EXPORT_DENYLIST = [
   "TMUX_PANE",
 ] as const;
 
+const DEFAULT_TMUX_ENV: Readonly<Record<string, string>> = {
+  NO_COLOR: "1",
+  TERM: "dumb",
+  PAGER: "cat",
+  LC_ALL: "C",
+  DEBIAN_FRONTEND: "noninteractive",
+};
+
 const DEFAULT_BASH_SYSTEM_PROMPT_SNIPPET = "Execute bash commands in background windows";
 const DEFAULT_TMUX_SYSTEM_PROMPT_SNIPPET =
   "Inspect and control the background jobs created by bash tool";
@@ -112,6 +120,9 @@ const buildTmuxBashOptionsSchema = () =>
       bashToolDescription: promptTemplateSchema.default(DEFAULT_BASH_TOOL_DESCRIPTION),
       tmuxToolDescription: promptTemplateSchema.default(DEFAULT_TMUX_TOOL_DESCRIPTION),
       tmuxBinary: nonEmptyStringSchema.default("tmux"),
+      tmuxEnv: z
+        .record(z.string(), z.string())
+        .default(() => ({ ...DEFAULT_TMUX_ENV })),
       tmuxEnvExportDenylist: z
         .array(nonEmptyStringSchema)
         .default(() => [...DEFAULT_TMUX_ENV_EXPORT_DENYLIST]),
@@ -182,6 +193,8 @@ export type ResolvedOptions = Omit<
   tmuxEnabledActions: readonly TmuxAction[];
   tmuxEnvExportDenylist: readonly string[];
 };
+
+export { DEFAULT_TMUX_ENV };
 
 export const DEFAULT_OPTIONS: ResolvedOptions = TmuxBashOptionsSchema.parse({});
 

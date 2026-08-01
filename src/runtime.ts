@@ -399,6 +399,12 @@ export const formatEnvironmentExportsForBash = (
     .join("\n");
 };
 
+export const formatConfiguredEnvExports = (env: Record<string, string>): string =>
+  Object.entries(env)
+    .filter(([name]) => SHELL_IDENTIFIER_REGEX.test(name))
+    .map(([name, value]) => `export ${name}=${shellQuote(value)}`)
+    .join("\n");
+
 // The script tees exact output, writes an exit-code sentinel, then stays attachable as a login shell.
 const createBashCommandScript = (
   runDir: string,
@@ -426,6 +432,7 @@ __output_file="$__exit_code_file.out"
 : > "$__output_file"
 printf '$ %s\n' ${shellQuote(displayCommand)}
 ${formatEnvironmentExportsForBash(process.env, options.tmuxEnvExportDenylist)}
+${formatConfiguredEnvExports(options.tmuxEnv)}
 (
 ${cmd}
 ) 2>&1 | tee -a "$__output_file"

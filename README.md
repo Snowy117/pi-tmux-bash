@@ -331,7 +331,30 @@ Default config settings:
 
   // Environment names not exported from Pi into bash-in-tmux scripts.
   // Skips shell/tmux bookkeeping that should be owned by the new tmux window.
-  "tmuxEnvExportDenylist": ["PWD", "OLDPWD", "SHLVL", "_", "TMUX", "TMUX_PANE"]
+  "tmuxEnvExportDenylist": ["PWD", "OLDPWD", "SHLVL", "_", "TMUX", "TMUX_PANE"],
+
+  // ─────────────────────────────────────────────────────────────
+  // Environment variables for commands in tmux
+  // ─────────────────────────────────────────────────────────────
+
+  // Custom environment variables to set in every bash-in-tmux script.
+  // These are exported after the Pi process environment, so they override any
+  // conflicting values from the parent process. Defaults are designed to make
+  // command output more predictable and machine-readable for the LLM:
+  //   NO_COLOR=1          — disable ANSI color escape sequences
+  //   TERM=dumb           — minimal terminal capability (no cursor movement)
+  //   PAGER=cat           — avoid pager prompts (e.g. from git log)
+  //   LC_ALL=C            — stable locale, forces English output
+  //   DEBIAN_FRONTEND=noninteractive — suppress apt prompts
+  //
+  // Set to {} to inherit the Pi process environment as-is.
+  "tmuxEnv": {
+    "NO_COLOR": "1",
+    "TERM": "dumb",
+    "PAGER": "cat",
+    "LC_ALL": "C",
+    "DEBIAN_FRONTEND": "noninteractive"
+  }
 }
 ```
 
