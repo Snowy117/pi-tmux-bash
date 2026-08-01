@@ -80,10 +80,15 @@ export const registerBashTool = (
       );
     },
     renderCall(args, theme, context) {
-      startBashRenderTiming(context as ToolRenderContext<BashRenderState, Partial<BashInput>>);
+      const renderContext = context as ToolRenderContext<BashRenderState, Partial<BashInput>> & {
+        expanded: boolean;
+      };
+      startBashRenderTiming(renderContext);
       return new Text(
         renderBashCallText(args as Partial<BashInput>, theme, {
           commandDisplayLength: options.bashCommandDisplayLength,
+          collapsedDisplayLines: options.bashCommandCollapsedDisplayLines,
+          expanded: renderContext.expanded,
         }),
         0,
         0,

@@ -287,16 +287,29 @@ const formatCompletionDetailLines = (lines: RenderedBashOutputLine[]): string[] 
   );
 
 const normalizeCommand = (args: Partial<BashInput>): string =>
-  (args.command ?? "...").replace(/\s+/g, " ").trim();
+  (args.command ?? "...").replace(/\r\n/g, "\n").trim();
 
 export type BashCallRenderOptions = {
   commandDisplayLength?: number;
+  collapsedDisplayLines?: number;
+  expanded?: boolean;
 };
 
-const bashCallCommand = (
+const truncateCommandLine = (line: string, commandDisplayLength: number): string =>
+  truncateText(line, commandDisplayLength);
+
+const bashCallCommandLines = (
   args: Partial<BashInput>,
-  commandDisplayLength = DEFAULT_OPTIONS.bashCommandDisplayLength,
-): string => truncateText(normalizeCommand(args), commandDisplayLength);
+  { commandDisplayLength = DEFAULT_OPTIONS.bashCommandDisplayLength, expanded = false, collapsedDisplayLines = DEFAULT_OPTIONS.bashCommandCollapsedDisplayLines }: BashCallRenderOptions = {},
+): string[] => {
+  const normalized = normalizeCommand(args);
+  const lines = normalized.split("\n");
+  const truncatedLines = lines.map((line) => truncateCommandLine(line, commandDisplayLength));
+
+  if (expanded || lines.length <= collapsedDisplayLines) return truncatedLines;
+
+  return [...truncatedLines.slice(0, collapsedDisplayLines), "..."];
+};
 
 const bashBackgroundMetadata = (args: Partial<BashInput>): string => {
   const poll =
@@ -314,18 +327,43 @@ const bashCallMetadata = (args: Partial<BashInput>): string[] => {
 
 export const formatRenderedBashCall = (
   args: Partial<BashInput>,
-  { commandDisplayLength }: BashCallRenderOptions = {},
-): string =>
-  [`$ ${bashCallCommand(args, commandDisplayLength)}`, ...bashCallMetadata(args)].join(" ");
+  { commandDisplayLength, collapsedDisplayLines, expanded }: BashCallRenderOptions = {},
+): string => {
+  const lines = bashCallCommandLines(args, { commandDisplayLength, collapsedDisplayLines, expanded });
+  const metadata = bashCallMetadata(args);
+  const tail = metadata.length > 0 ? ` ${metadata.join(" ")}` : "";
+  const lastIndex = lines.length - 1;
+
+  return lines
+    .map((line, index) => {
+      if (index === 0 && index === lastIndex) return `$ ${line}${tail}`.trimEnd();
+      if (index === 0) return `$ ${line}`;
+      if (index === lastIndex) return `${line}${tail}`.trimEnd();
+      return line;
+    })
+    .filter((line) => line.length > 0)
+    .join("\n");
+};
 
 export const renderBashCallText = (
   args: Partial<BashInput>,
   theme: RenderTheme,
-  { commandDisplayLength }: BashCallRenderOptions = {},
-): string =>
-  `${theme.fg("toolTitle", theme.bold(`$ ${bashCallCommand(args, commandDisplayLength)}`))}${bashCallMetadata(args)
-    .map((item) => theme.fg("muted", ` ${item}`))
-    .join("")}`;
+  { commandDisplayLength, collapsedDisplayLines, expanded }: BashCallRenderOptions = {},
+): string => {
+  const lines = bashCallCommandLines(args, { commandDisplayLength, collapsedDisplayLines, expanded });
+  const metadata = bashCallMetadata(args);
+  const metadataText = metadata.length > 0
+    ? metadata.map((item) => theme.fg("muted", ` ${item}`)).join("")
+    : "";
+
+  return lines
+    .map((line, index) => {
+      const prefix = index === 0 ? "$ " : "";
+      return theme.fg("toolTitle", theme.bold(`${prefix}${line}`));
+    })
+    .join("\n")
+    .replace(/\n$/, "") + metadataText;
+};
 
 const stripTrailingEmptyLines = (lines: string[]): string[] => {
   const reversedLastContentIndex = [...lines].reverse().findIndex((line) => line.trim() !== "");

@@ -130,6 +130,9 @@ const buildTmuxBashOptionsSchema = () =>
       bashContextLines: positiveIntegerSchema.default(DEFAULT_MAX_LINES),
       // Max characters of the command shown in the TUI tool-call title; 0 shows the full command.
       bashCommandDisplayLength: z.number().int().nonnegative().default(80),
+      // Max lines of the command shown in the TUI tool-call title when collapsed.
+      // When the command exceeds this many lines, only the first N lines are shown followed by "...".
+      bashCommandCollapsedDisplayLines: positiveIntegerSchema.default(2),
       bashCompactDisplayLines: positiveIntegerSchema.default(5),
       bashTruncatedCompactDisplayLines: positiveIntegerSchema.default(2),
       bashExpandedDisplayLines: positiveIntegerSchema.default(DEFAULT_MAX_LINES),
