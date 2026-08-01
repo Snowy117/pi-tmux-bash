@@ -2,6 +2,13 @@
 
 This is a fork of `@richardgill/pi-tmux-bash`. Versions below `0.0.13` are inherited from the upstream package.
 
+## 0.0.16
+
+### Breaking Changes
+
+- Removed hypa compression support (`modelOutputCompression`, `hypaBinary`, `hypaCompress*`, `unwrapHypaCommandWrapper` options and all related code).
+- Lowered minimum Node.js version from 24 to 22.
+
 ## 0.0.15
 
 ### Minor Changes

@@ -58,20 +58,6 @@ import {
   type FormattedOutput,
   type PollMessageRenderDetails,
 } from "./render";
-import { formatOutputForModel, resolveExecutableCommand, type HypaExecFn } from "./compress";
-
-const hypaExecFromPi =
-  (pi: ExtensionAPI): HypaExecFn =>
-  async (command, args, options) => {
-    const result = await pi.exec(command, args, { timeout: options?.timeout });
-    return {
-      stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
-      code: result.code,
-      killed: result.killed,
-    };
-  };
-
 const formatModelFacingOutput = async (args: {
   rawText: string;
   rawSourceBytes?: number;
@@ -79,22 +65,20 @@ const formatModelFacingOutput = async (args: {
   rawFilePath?: string;
   options: ResolvedOptions;
   contextLines: number;
-  pi?: ExtensionAPI;
   windowId?: string;
   state?: ExtensionState;
 }): Promise<FormattedOutput> => {
   if (args.state && args.windowId && args.rawFilePath) {
     args.state.rawOutputByWindowId.set(args.windowId, args.rawFilePath);
   }
-  return formatOutputForModel({
-    rawText: args.rawText,
-    rawSourceBytes: args.rawSourceBytes,
-    rawSourceTruncated: args.rawSourceTruncated,
-    rawFilePath: args.rawFilePath,
-    options: args.options,
-    contextLines: args.contextLines,
-    exec: args.pi ? hypaExecFromPi(args.pi) : undefined,
-    windowId: args.windowId,
+  return formatOutput(args.rawText, {
+    fullOutputPath: args.rawFilePath,
+    sourceBytes: args.rawSourceBytes,
+    sourceTruncated: args.rawSourceTruncated,
+    truncationOptions: {
+      maxLines: args.contextLines,
+      maxBytes: args.options.maxOutputBytes,
+    },
   });
 };
 
@@ -852,7 +836,6 @@ const startPoller = (
           rawFilePath: outputFile,
           options,
           contextLines: outputLines,
-          pi,
           windowId,
           state,
         })
@@ -922,7 +905,6 @@ const handleCompletedExitCodeFile = async (
     rawFilePath: fileOutput === null ? undefined : outputFile,
     options,
     contextLines: options.completedContextLines,
-    pi,
     windowId: parsed.windowId,
     state,
   });
@@ -1443,10 +1425,7 @@ export const runBashInTmux = async (
   const session = calcTmuxSessionName(gitRoot, options);
   const piSessionId = ctx.sessionManager.getSessionId();
   const runDir = getRunDir(state, options);
-  const executableCommand = resolveExecutableCommand(
-    params.command,
-    options.unwrapHypaCommandWrapper,
-  ).command;
+  const executableCommand = params.command;
   const result = createBashWindow({
     runDir,
     session,
@@ -1526,7 +1505,6 @@ export const runBashInTmux = async (
     rawFilePath: result.outputFile,
     options,
     contextLines: options.bashContextLines,
-    pi,
     windowId: result.windowId,
     state,
   });

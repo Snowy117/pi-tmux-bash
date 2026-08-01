@@ -86,7 +86,7 @@ The `tmux` tool allows the model to inspect running bash processes.
 { "action": "peek", "window": "@123" }
 ```
 
-### Load unfiltered tee output (after Hypa compression or when details look missing).
+### Load unfiltered tee output (when details look missing).
 
 Works with a live/finished window id (session-indexed) and/or an absolute `.out` path under `outputDir`:
 
@@ -261,21 +261,6 @@ Default config settings:
   // Maximum output bytes kept for model context and TUI cards.
   "maxOutputBytes": 51200,
 
-  // ─────────────────────────────────────────────────────────────
-  // Model output compression (Hypa)
-  // ─────────────────────────────────────────────────────────────
-  // Compress model-facing bash/completion results with `hypa compress`.
-  // bg_jobs peek and mid-run poll always read the raw tee file.
-  // Requires the `hypa` binary only (pi-hypa extension is not required).
-  "modelOutputCompression": "off", // "off" (default) | "hypa"
-  "hypaBinary": "hypa",
-  "hypaCompressKind": "shell-output", // "shell-output" | "log" | "code" | "generic"
-  "hypaCompressMaxTokens": 2000, // 0 disables --max-tokens
-  "hypaCompressTimeoutMs": 15000,
-  "hypaCompressMinBytes": 2048, // skip hypa for smaller raw outputs
-  "hypaCompressShowRawPath": true, // append compact [raw output: path window=@id] footer
-  "unwrapHypaCommandWrapper": true, // strip outer `hypa -c "..."` before tmux execution
-
   // Foreground bash output lines sent to model context.
   "bashContextLines": 2000,
 
@@ -412,32 +397,6 @@ ctx.ui.setFooter((_tui, theme, footerData) => ({
 ```
 
 The status key is `backgroundBashTmuxCommands`. Status values are strings; tmux-bash clears the status when there are no active background windows.
-
-## Model output compression (Hypa)
-
-Optional post-processing for **model-facing** bash results and background completion messages. `bg_jobs peek` and mid-run poll always read the raw tee file.
-
-1. Install the `hypa` binary (the `pi-hypa` extension is **not** required).
-2. Enable in `~/.pi/agent/tmux-bash.jsonc`:
-
-```jsonc
-{
-  "modelOutputCompression": "hypa",
-  "hypaBinary": "hypa",
-  "hypaCompressMinBytes": 2048,
-  "unwrapHypaCommandWrapper": true
-}
-```
-
-When enabled, finished command output is passed through `hypa compress --file <raw.out>`. Failures fall back to the usual truncated raw output. Outer `hypa -c "..."` wrappers (e.g. from a rewrite hook) are stripped before tmux execution so long-running jobs keep a live raw log for peek.
-
-If compressed output looks wrong or incomplete, recover the unfiltered tee file without re-running the command:
-
-- Footer looks like `[raw output: /tmp/.../file.out window=@123]`
-- Call `{ "action": "raw", "window": "@123" }` or `{ "action": "raw", "path": "/…/file.out" }`
-- Or use the `read` tool on that `.out` path
-
-Keep `preserveOutputFiles: true` (default) so paths remain after the session cleans scripts.
 
 ## Credits
 
