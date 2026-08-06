@@ -3,6 +3,7 @@ import { BACKGROUND_BASH_STATUS_KEY, resolveOptions, type TmuxBashOptions } from
 import { cleanupState, createState, resetRunDir, updateBackgroundProcessStatus } from "./runtime";
 import { registerMessageRenderers } from "./renderers/messages";
 import { registerBashTool } from "./tools/bash-tool";
+import { registerInteractiveShellTool } from "./tools/shell-tool";
 import { registerTmuxTool } from "./tools/tmux-tool";
 
 export { DEFAULT_OPTIONS, TmuxBashOptionsSchema, type TmuxBashOptions } from "./config";
@@ -25,6 +26,7 @@ export const tmuxBash = (input: TmuxBashOptions = {}) => {
     });
 
     registerBashTool(pi, state, options);
+    if (options.interactiveShellEnabled) registerInteractiveShellTool(pi, state, options);
     if (options.tmuxEnabledActions.length > 0) registerTmuxTool(pi, state, options);
     registerMessageRenderers(pi, options);
   };

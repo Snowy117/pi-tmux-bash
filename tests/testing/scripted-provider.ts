@@ -4,6 +4,7 @@ import path from "node:path";
 export type ScriptedStep =
   | ScriptedToolCallStep
   | ScriptedToolCallWithLatestWindowIdStep
+  | ScriptedToolCallWithLatestShellSessionIdStep
   | ScriptedTextStep
   | ScriptedErrorStep
   | ScriptedExpectLatestToolResultStep
@@ -19,6 +20,13 @@ type ScriptedToolCallStep = {
 
 type ScriptedToolCallWithLatestWindowIdStep = {
   type: "toolCallWithLatestWindowId";
+  name: string;
+  args: Record<string, unknown>;
+  delayMs?: number;
+};
+
+type ScriptedToolCallWithLatestShellSessionIdStep = {
+  type: "toolCallWithLatestShellSessionId";
   name: string;
   args: Record<string, unknown>;
   delayMs?: number;
@@ -81,6 +89,17 @@ export const scriptedToolCallWithLatestWindowId = (
   options: { delayMs?: number } = {},
 ): ScriptedStep => ({
   type: "toolCallWithLatestWindowId",
+  name,
+  args,
+  ...options,
+});
+
+export const scriptedToolCallWithLatestShellSessionId = (
+  name: string,
+  args: Record<string, unknown>,
+  options: { delayMs?: number } = {},
+): ScriptedStep => ({
+  type: "toolCallWithLatestShellSessionId",
   name,
   args,
   ...options,
@@ -222,6 +241,8 @@ const scriptedStepSource = (step: ScriptedStep): string => {
   if (step.type === "toolCall") return scriptedToolCallSource(step);
   if (step.type === "toolCallWithLatestWindowId")
     return scriptedToolCallWithLatestWindowIdSource(step);
+  if (step.type === "toolCallWithLatestShellSessionId")
+    return scriptedToolCallWithLatestShellSessionIdSource(step);
   if (step.type === "error") return scriptedErrorSource(step);
   if (step.type === "expectLatestToolResult") return scriptedExpectLatestToolResultSource(step);
   if (step.type === "recordLatestToolResult") return scriptedRecordLatestToolResultSource(step);
@@ -245,6 +266,18 @@ const scriptedToolCallWithLatestWindowIdSource = (
     const match = latestToolResultText(context).match(/@\\d+/);
     if (!match) throw new Error("No tmux window id found in latest tool result");
     return fauxAssistantMessage([fauxToolCall(${JSON.stringify(step.name)}, { ...${JSON.stringify(step.args)}, window: match[0] })], { stopReason: "toolUse" });
+  }`;
+  if (step.delayMs === undefined) return response;
+  return `async (context) => { await sleep(${JSON.stringify(step.delayMs)}); return (${response})(context); }`;
+};
+
+const scriptedToolCallWithLatestShellSessionIdSource = (
+  step: ScriptedToolCallWithLatestShellSessionIdStep,
+): string => {
+  const response = `(context) => {
+    const match = latestToolResultText(context, ${JSON.stringify(step.name)}).match(/sh_[a-f0-9]{12}/);
+    if (!match) throw new Error("No interactive shell session id found in latest tool result");
+    return fauxAssistantMessage([fauxToolCall(${JSON.stringify(step.name)}, { ...${JSON.stringify(step.args)}, sessionId: match[0] })], { stopReason: "toolUse" });
   }`;
   if (step.delayMs === undefined) return response;
   return `async (context) => { await sleep(${JSON.stringify(step.delayMs)}); return (${response})(context); }`;

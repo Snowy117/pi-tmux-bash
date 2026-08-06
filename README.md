@@ -133,6 +133,34 @@ You can limit available tmux actions and bash-started polling:
 }
 ```
 
+## `shell` tool
+
+Use `shell` for commands that need a persistent PTY or stdin, such as an interactive bash, a
+REPL, or a command that pauses for input. The first call starts a session and returns a
+`sessionId`; subsequent `write` calls send literal input or control signals and return only new
+output. The `start` command is a Bash command; keep it concise and prefer later `write` calls over
+complex Bash syntax.
+
+```jsonc
+{
+  "action": "start",
+  "command": "bash --noprofile --norc -i",
+  "waitMs": 1000
+}
+```
+
+```jsonc
+{
+  "action": "write",
+  "sessionId": "sh_0123456789ab",
+  "input": "echo hello\n",
+  "waitMs": 1000
+}
+```
+
+Use an empty `input` to poll without writing, or set `signal` to `SIGINT`, `EOF`, or `SIGTERM`.
+Sessions are scoped to the current Pi session and are terminated when that session shuts down.
+
 ## Configuration
 
 You can override individual settings in `tmux-bash.jsonc`.
@@ -165,6 +193,18 @@ Default config settings:
   // Bash tool name exposed to the agent. Change if another extension registers "bash".
   "bashToolName": "bash",
 
+  // Whether to register the persistent interactive shell tool.
+  "interactiveShellEnabled": true,
+
+  // Interactive shell tool name exposed to the agent.
+  "shellToolName": "shell",
+
+  // Milliseconds to wait for initial/new output before returning from a shell call.
+  "shellDefaultWaitMs": 1000,
+
+  // Maximum allowed shell waitMs value.
+  "shellMaxWaitMs": 10000,
+
   // Tmux inspection/control tool name exposed to the agent.
   "tmuxToolName": "bg_jobs",
 
@@ -176,6 +216,7 @@ Default config settings:
 
   // Template variables:
   // `{{bashToolName}}`: configured with `bashToolName`, default `bash`
+  // `{{shellToolName}}`: configured with `shellToolName`, default `shell`
   // `{{tmuxToolName}}`: configured with `tmuxToolName`, default `bg_jobs`
   // `{{defaultTimeoutSeconds}}` / `{{defaultTimeoutAction}}` / `{{maxTimeoutSeconds}}`
   // `{{bashContextLines}}` / `{{maxOutputKb}}`
@@ -188,18 +229,24 @@ Default config settings:
   // Supports the same template variables as systemPromptGuidelines below.
   "tmuxToolDescription": "Inspect and control background jobs created by bash. Peek output is compact by default. Use action raw to load unfiltered tee output by window id or .out path.",
 
+  // Interactive shell tool description sent to the model tool schema.
+  // Supports the same template variables as systemPromptGuidelines below.
+  "shellToolDescription": "Run a Bash command in a persistent tmux PTY. Use action start with a concise Bash command, then action write with its sessionId to send input or poll output. Prefer simple commands over complex Bash syntax. Use signal for Ctrl-C, Ctrl-D, or termination.",
+
   // modify Pi's built-in system prompt.
   "systemPrompt": true,
 
   // Tool snippets for Pi's generated system prompt tools section.
   "bashSystemPromptSnippet": "Execute bash commands in background windows", // string | false (to disable)
   "tmuxSystemPromptSnippet": "Inspect and control the background jobs created by bash tool", // string | false (to disable)
+  "shellSystemPromptSnippet": "Run interactive shell processes and continue them with the shell session id", // string | false (to disable)
 
   // Guideline bullets appended to Pi's generated system prompt:
   //   Omit systemPromptGuidelines to use defaults.
   //   [] to disable tmux-bash guidelines.
   "systemPromptGuidelines": [
-    "Use {{bashToolName}} with background: true or timeoutAction: \"background\" for long-running commands, servers, watchers, REPLs, interactive prompts, and background bash commands.",
+    "Use {{bashToolName}} with background: true or timeoutAction: \"background\" for long-running commands, servers, watchers, and background bash commands.",
+    "Use {{shellToolName}} for REPLs and interactive prompts that need stdin or a persistent PTY.",
     "Background bash commands will report automatically when they finish; do not keep polling manually unless you need interim output.",
     "Use {{tmuxToolName}} list to find background windows",
     "Use {{tmuxToolName}} peek/kill with a stable #{window_id} like @123.",
@@ -435,4 +482,3 @@ The status key is `backgroundBashTmuxCommands`. Status values are strings; tmux-
 ## Credits
 
 This extension was inspired by [`indigoviolet/pi-tmux`](https://github.com/indigoviolet/pi-tmux).
-

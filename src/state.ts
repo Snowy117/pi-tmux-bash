@@ -3,6 +3,7 @@ import { existsSync, chmodSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { FSWatcher } from "node:fs";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { execSafe, shellQuote } from "./tmux-utils";
 
 export type CommandRunInfo = {
   session: string;
@@ -22,6 +23,21 @@ export type Poller = {
   commandRun?: CommandRunInfo;
 };
 
+export type InteractiveShellSession = {
+  id: string;
+  tmuxSession: string;
+  windowId: string;
+  gitRoot: string;
+  piSessionId: string;
+  command: string;
+  outputFile: string;
+  statusFile: string;
+  readyFile: string;
+  outputOffset: number;
+  status: "running" | "exited" | "killed";
+  exitCode?: number;
+};
+
 export type ExtensionState = {
   runDir: string | null;
   watcher: FSWatcher | null;
@@ -31,6 +47,7 @@ export type ExtensionState = {
   pendingPollMessageTimers: Set<NodeJS.Timeout>;
   statusContext: ExtensionContext | null;
   rawOutputByWindowId: Map<string, string>;
+  interactiveShellSessions: Map<string, InteractiveShellSession>;
 };
 
 // ── Tool result helpers ────────────────────────────────────────────────
@@ -71,6 +88,7 @@ export const createState = (): ExtensionState => ({
   pendingPollMessageTimers: new Set(),
   statusContext: null,
   rawOutputByWindowId: new Map(),
+  interactiveShellSessions: new Map(),
 });
 
 export const resetRunDir = (
@@ -101,6 +119,14 @@ export const cleanupState = (
   state: ExtensionState,
   options: import("./config").ResolvedOptions,
 ): void => {
+  for (const session of state.interactiveShellSessions.values()) {
+    if (session.status === "running") {
+      execSafe(
+        `${shellQuote(options.tmuxBinary)} kill-window -t ${shellQuote(session.windowId)}`,
+      );
+    }
+  }
+  state.interactiveShellSessions.clear();
   state.watcher?.close();
   state.watcher = null;
   for (const poller of state.pollers.values()) clearInterval(poller.timer);

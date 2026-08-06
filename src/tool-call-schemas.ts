@@ -4,6 +4,7 @@ import type { TmuxAction } from "./config";
 
 type SchemaOptions = {
   bashToolName: string;
+  shellToolName?: string;
   tmuxToolName: string;
   defaultTimeoutSeconds: number;
   defaultTimeoutAction: "kill" | "background";
@@ -12,6 +13,8 @@ type SchemaOptions = {
   pollContextLines: number;
   tmuxEnabledActions: readonly TmuxAction[];
   bashPollIntervalEnabled: boolean;
+  shellDefaultWaitMs?: number;
+  shellMaxWaitMs?: number;
 };
 
 type InvalidInput<TInvalidResult> = (message: string) => TInvalidResult;
@@ -101,6 +104,27 @@ export type TmuxInput =
   | { action: "unpoll"; window: string }
   | { action: "wait"; window: string };
 
+export type ShellSignal = "SIGINT" | "EOF" | "SIGTERM";
+
+export type ShellInput =
+  | {
+      action: "start";
+      command: string;
+      name?: string;
+      waitMs: number;
+    }
+  | {
+      action: "write";
+      sessionId: string;
+      input: string;
+      signal?: ShellSignal;
+      waitMs: number;
+    }
+  | {
+      action: "kill";
+      sessionId: string;
+    };
+
 const buildBashInputSchema = (options: SchemaOptions): z.ZodType<BashInput> => {
   const pollProperties = bashPollProperties(options);
 
@@ -173,6 +197,51 @@ const buildTmuxInputSchema = (options: SchemaOptions): z.ZodType<TmuxInput> => {
   return z.discriminatedUnion("action", [firstSchema, ...remainingSchemas]) as z.ZodType<TmuxInput>;
 };
 
+const shellWaitMs = (options: SchemaOptions) =>
+  z
+    .number()
+    .int()
+    .nonnegative()
+    .max(options.shellMaxWaitMs ?? 10000)
+    .default(options.shellDefaultWaitMs ?? 1000)
+    .describe("Milliseconds to wait for output or process completion before returning.");
+
+const shellSessionId = z
+  .string()
+  .regex(/^sh_[a-f0-9]{12}$/)
+  .describe("Interactive shell session id returned by action start.");
+
+const buildShellInputSchema = (options: SchemaOptions): z.ZodType<ShellInput> =>
+  z.discriminatedUnion("action", [
+    z.object({
+      action: z.literal("start"),
+      command: z
+        .string()
+        .min(1)
+        .describe("Bash command to start in a persistent tmux PTY. Keep it concise and avoid complex Bash syntax."),
+      name,
+      waitMs: shellWaitMs(options),
+    }),
+    z.object({
+      action: z.literal("write"),
+      sessionId: shellSessionId,
+      input: z
+        .string()
+        .max(65536)
+        .default("")
+        .describe("Literal input to send. Use an empty string to poll for new output."),
+      signal: z
+        .enum(["SIGINT", "EOF", "SIGTERM"])
+        .optional()
+        .describe("Optional control signal: SIGINT sends Ctrl-C, EOF sends Ctrl-D, SIGTERM stops the session."),
+      waitMs: shellWaitMs(options),
+    }),
+    z.object({
+      action: z.literal("kill"),
+      sessionId: shellSessionId,
+    }),
+  ]) as z.ZodType<ShellInput>;
+
 export const buildBashToolCallSchema = <TInvalidResult>(
   options: SchemaOptions,
   invalidInput: InvalidInput<TInvalidResult>,
@@ -190,5 +259,15 @@ export const buildTmuxToolCallSchema = <TInvalidResult>(
   defineZodToolCall({
     toolName: options.tmuxToolName,
     zodSchema: buildTmuxInputSchema(options),
+    invalidInput,
+  });
+
+export const buildShellToolCallSchema = <TInvalidResult>(
+  options: SchemaOptions,
+  invalidInput: InvalidInput<TInvalidResult>,
+) =>
+  defineZodToolCall({
+    toolName: options.shellToolName ?? "shell",
+    zodSchema: buildShellInputSchema(options),
     invalidInput,
   });

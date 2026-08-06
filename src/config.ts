@@ -27,10 +27,14 @@ const DEFAULT_TMUX_ENV: Readonly<Record<string, string>> = {
 const DEFAULT_BASH_SYSTEM_PROMPT_SNIPPET = "Execute bash commands in background windows";
 const DEFAULT_TMUX_SYSTEM_PROMPT_SNIPPET =
   "Inspect and control the background jobs created by bash tool";
+const DEFAULT_INTERACTIVE_SHELL_SYSTEM_PROMPT_SNIPPET =
+  "Run interactive shell processes and continue them with the shell session id";
 const DEFAULT_BASH_TOOL_DESCRIPTION =
   'Execute a bash command in a background window. Output is truncated to last {{bashContextLines}} lines or {{maxOutputKb}}KB. Defaults to a {{defaultTimeoutSeconds}}s timeout, max {{maxTimeoutSeconds}}s; timeoutAction defaults to "{{defaultTimeoutAction}}". Use background for long-running commands.';
 const DEFAULT_TMUX_TOOL_DESCRIPTION =
   "Inspect and control background jobs created by bash. Peek output is compact by default. Use action raw to load unfiltered tee output by window id or .out path.";
+const DEFAULT_INTERACTIVE_SHELL_DESCRIPTION =
+  "Run a Bash command in a persistent tmux PTY. Use action start with a concise Bash command, then action write with its sessionId to send input or poll output. Prefer simple commands over complex Bash syntax. Use signal for Ctrl-C, Ctrl-D, or termination.";
 const DEFAULT_PEEK_EXPANDED_DISPLAY_LINES = 50;
 
 export const TMUX_ACTIONS = [
@@ -46,7 +50,8 @@ export const TMUX_ACTIONS = [
 const DEFAULT_TMUX_ENABLED_ACTIONS = ["list", "peek", "raw", "kill", "wait"] as const;
 
 const DEFAULT_SYSTEM_PROMPT_GUIDELINES = [
-  'Use {{bashToolName}} with background: true or timeoutAction: "background" for long-running commands, servers, watchers, REPLs, interactive prompts, and background bash commands.',
+  'Use {{bashToolName}} with background: true or timeoutAction: "background" for long-running commands, servers, watchers, and background bash commands.',
+  "Use {{shellToolName}} for REPLs and interactive prompts that need stdin or a persistent PTY.",
   "Background bash commands will report automatically when they finish; do not keep polling manually unless you need interim output.",
   "Use {{tmuxToolName}} list to find background windows",
   "Use {{tmuxToolName}} peek/kill with a stable window id like @123.",
@@ -64,6 +69,7 @@ const promptTemplateVariables = [
   "maxOutputKb",
   "maxTimeoutSeconds",
   "outputDir",
+  "shellToolName",
   "tmuxToolName",
 ];
 
@@ -113,6 +119,11 @@ const buildTmuxBashOptionsSchema = () =>
       tmuxWindowScope: z.enum(["pi-session", "git-root", "all"]).default("pi-session"),
       bashToolName: nonEmptyStringSchema.default("bash"),
       tmuxToolName: nonEmptyStringSchema.default("bg_jobs"),
+      interactiveShellEnabled: z.boolean().default(true),
+      shellToolName: nonEmptyStringSchema.default("shell"),
+      shellToolDescription: promptTemplateSchema.default(DEFAULT_INTERACTIVE_SHELL_DESCRIPTION),
+      shellDefaultWaitMs: z.number().int().nonnegative().default(1000),
+      shellMaxWaitMs: positiveIntegerSchema.default(10000),
       tmuxEnabledActions: z
         .array(tmuxActionSchema)
         .default(() => [...DEFAULT_TMUX_ENABLED_ACTIONS]),
@@ -170,12 +181,18 @@ const buildTmuxBashOptionsSchema = () =>
       systemPrompt: z.boolean().default(true),
       bashSystemPromptSnippet: promptToolEntrySchema.default(DEFAULT_BASH_SYSTEM_PROMPT_SNIPPET),
       tmuxSystemPromptSnippet: promptToolEntrySchema.default(DEFAULT_TMUX_SYSTEM_PROMPT_SNIPPET),
+      shellSystemPromptSnippet: promptToolEntrySchema.default(
+        DEFAULT_INTERACTIVE_SHELL_SYSTEM_PROMPT_SNIPPET,
+      ),
       systemPromptGuidelines: promptGuidelinesSchema.default(() => [
         ...DEFAULT_SYSTEM_PROMPT_GUIDELINES,
       ]),
     })
     .refine(timeoutOrderIsValid, {
       message: "defaultTimeoutSeconds must be less than or equal to maxTimeoutSeconds",
+    })
+    .refine((config) => config.shellDefaultWaitMs <= config.shellMaxWaitMs, {
+      message: "shellDefaultWaitMs must be less than or equal to shellMaxWaitMs",
     });
 
 export const TmuxBashOptionsSchema = buildTmuxBashOptionsSchema();

@@ -25,6 +25,7 @@ export const TMUX_WINDOW_OPTIONS = {
   piSessionId: "@pi-tmux-bash-pi-session-id",
   outputFile: "@pi-tmux-bash-output-file",
   displayCommand: "@pi-tmux-bash-display-command",
+  interactiveSessionId: "@pi-tmux-bash-interactive-session-id",
 } as const;
 
 export const tmuxFormatOption = (option: string): string => `#{${option}}`;

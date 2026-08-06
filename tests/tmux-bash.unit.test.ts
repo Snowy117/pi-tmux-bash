@@ -220,7 +220,22 @@ describe("tmux-bash unit", () => {
     it("omits tmux tool when all tmux actions are disabled", () => {
       const tools = registeredToolsForOptions({ tmuxEnabledActions: [] });
 
-      expect(tools.map((tool) => tool.name)).toEqual(["bash"]);
+      expect(tools.map((tool) => tool.name)).toEqual(["bash", "shell"]);
+    });
+
+    it("can disable the interactive shell tool", () => {
+      const tools = registeredToolsForOptions({ interactiveShellEnabled: false });
+
+      expect(tools.map((tool) => tool.name)).toEqual(["bash", "bg_jobs"]);
+    });
+
+    it("registers the interactive shell tool with configurable naming", () => {
+      const tools = registeredToolsForOptions({ shellToolName: "terminal" });
+      const shellTool = registeredTool(tools, "terminal");
+      const action = shellTool.parameters.properties?.action as { enum?: string[] };
+
+      expect(action.enum).toEqual(["start", "write", "kill"]);
+      expect(shellTool.promptGuidelines?.join("\n")).toContain("terminal action start");
     });
 
     it("registers tmux tool with default actions only", () => {

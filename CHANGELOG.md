@@ -2,6 +2,13 @@
 
 This is a fork of `@richardgill/pi-tmux-bash`. Versions below `0.0.13` are inherited from the upstream package.
 
+## 0.0.17
+
+### Minor Changes
+
+- Add a `shell` tool for persistent interactive tmux PTY sessions. Start a process, send stdin or
+  Ctrl-C/Ctrl-D-style signals, poll incremental output, and terminate the session by id.
+
 ## 0.0.16
 
 ### Breaking Changes

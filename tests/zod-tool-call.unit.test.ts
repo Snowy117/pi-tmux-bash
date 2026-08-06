@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TMUX_ACTIONS } from "../src/config";
-import { buildBashToolCallSchema } from "../src/tool-call-schemas";
+import { buildBashToolCallSchema, buildShellToolCallSchema } from "../src/tool-call-schemas";
 
 type TestOptions = Parameters<typeof buildBashToolCallSchema>[0];
 
@@ -103,5 +103,50 @@ describe("zod tool call schema generation", () => {
     const result = await bashToolCallSchema().handleInput({ command: "" }, () => ({ ok: true }));
 
     expect(result).toEqual({ error: expect.stringContaining("Invalid bash input") });
+  });
+});
+
+describe("interactive shell schema generation", () => {
+  const shellToolCallSchema = (overrides: Partial<typeof options> = {}) =>
+    buildShellToolCallSchema(
+      {
+        ...options,
+        shellToolName: "shell",
+        shellDefaultWaitMs: 1000,
+        shellMaxWaitMs: 5000,
+        ...overrides,
+      },
+      invalidInput,
+    );
+
+  it("exposes start, write, and kill actions", () => {
+    const schema = shellToolCallSchema().typeBoxSchema;
+
+    expect(schema.type).toBe("object");
+    expect(schema.properties.action.enum).toEqual(["start", "write", "kill"]);
+    expect(schema.properties.waitMs.default).toBe(1000);
+  });
+
+  it("defaults write input to an empty poll", async () => {
+    const result = await shellToolCallSchema().handleInput(
+      { action: "write", sessionId: "sh_0123456789ab" },
+      (input) => input,
+    );
+
+    expect(result).toMatchObject({
+      action: "write",
+      sessionId: "sh_0123456789ab",
+      input: "",
+      waitMs: 1000,
+    });
+  });
+
+  it("rejects malformed session ids", async () => {
+    const result = await shellToolCallSchema().handleInput(
+      { action: "write", sessionId: "@123", input: "echo hi\n" },
+      (input) => input,
+    );
+
+    expect(result).toEqual({ error: expect.stringContaining("Invalid shell input") });
   });
 });
