@@ -2,6 +2,13 @@
 
 This is a fork of `@richardgill/pi-tmux-bash`. Versions below `0.0.13` are inherited from the upstream package.
 
+## Unreleased
+
+### Patch Changes
+
+- Advertise action-specific `shell` parameters so `start`, `write`, and `kill` tool calls only show
+  the fields accepted by that action.
+
 ## 0.0.17
 
 ### Minor Changes

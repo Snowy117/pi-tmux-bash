@@ -46,7 +46,10 @@ const plainTheme = {
 
 type RegisteredTool = {
   name: string;
-  parameters: { properties?: Record<string, unknown> };
+  parameters: {
+    properties?: Record<string, unknown>;
+    oneOf?: unknown[];
+  };
   promptGuidelines?: string[];
 };
 
@@ -232,9 +235,15 @@ describe("tmux-bash unit", () => {
     it("registers the interactive shell tool with configurable naming", () => {
       const tools = registeredToolsForOptions({ shellToolName: "terminal" });
       const shellTool = registeredTool(tools, "terminal");
-      const action = shellTool.parameters.properties?.action as { enum?: string[] };
+      const variants = shellTool.parameters.oneOf as {
+        properties: { action: { enum?: string[] } };
+      }[];
 
-      expect(action.enum).toEqual(["start", "write", "kill"]);
+      expect(variants.map((variant) => variant.properties.action.enum?.[0])).toEqual([
+        "start",
+        "write",
+        "kill",
+      ]);
       expect(shellTool.promptGuidelines?.join("\n")).toContain("terminal action start");
     });
 

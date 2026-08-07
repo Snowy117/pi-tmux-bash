@@ -1,4 +1,5 @@
 import { defineZodToolCall } from "@richardgill/pi-zod-tool-call";
+import { Type } from "@sinclair/typebox";
 import { z } from "zod";
 import type { TmuxAction } from "./config";
 
@@ -242,6 +243,42 @@ const buildShellInputSchema = (options: SchemaOptions): z.ZodType<ShellInput> =>
     }),
   ]) as z.ZodType<ShellInput>;
 
+type JsonSchemaObject = Record<string, unknown>;
+
+const isJsonSchemaObject = (value: unknown): value is JsonSchemaObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const actionAwareShellParameters = (zodSchema: z.ZodType<ShellInput>) => {
+  const generated = z.toJSONSchema(zodSchema, { io: "input" }) as JsonSchemaObject;
+  const variants = Array.isArray(generated.oneOf)
+    ? generated.oneOf.filter(isJsonSchemaObject)
+    : [];
+
+  const oneOf = variants.map((variant) => {
+    const properties = isJsonSchemaObject(variant.properties) ? variant.properties : {};
+    const action = isJsonSchemaObject(properties.action) ? properties.action : {};
+    const { const: actionValue, ...actionWithoutConst } = action;
+
+    return {
+      ...variant,
+      additionalProperties: false,
+      properties: {
+        ...properties,
+        action: {
+          ...actionWithoutConst,
+          ...(actionValue === undefined ? {} : { enum: [actionValue] }),
+        },
+      },
+    };
+  });
+
+  return Type.Unsafe<ShellInput>({
+    ...(typeof generated.$schema === "string" ? { $schema: generated.$schema } : {}),
+    type: "object",
+    oneOf,
+  });
+};
+
 export const buildBashToolCallSchema = <TInvalidResult>(
   options: SchemaOptions,
   invalidInput: InvalidInput<TInvalidResult>,
@@ -265,9 +302,16 @@ export const buildTmuxToolCallSchema = <TInvalidResult>(
 export const buildShellToolCallSchema = <TInvalidResult>(
   options: SchemaOptions,
   invalidInput: InvalidInput<TInvalidResult>,
-) =>
-  defineZodToolCall({
+) => {
+  const zodSchema = buildShellInputSchema(options);
+  const toolCallSchema = defineZodToolCall({
     toolName: options.shellToolName ?? "shell",
-    zodSchema: buildShellInputSchema(options),
+    zodSchema,
     invalidInput,
   });
+
+  return {
+    ...toolCallSchema,
+    typeBoxSchema: actionAwareShellParameters(zodSchema),
+  };
+};

@@ -119,12 +119,50 @@ describe("interactive shell schema generation", () => {
       invalidInput,
     );
 
-  it("exposes start, write, and kill actions", () => {
+  it("advertises action-specific parameter variants", () => {
     const schema = shellToolCallSchema().typeBoxSchema;
+    const variants = schema.oneOf as Record<string, any>[];
+    const variant = (action: string) =>
+      variants.find((candidate) => candidate.properties.action.enum.includes(action));
 
     expect(schema.type).toBe("object");
-    expect(schema.properties.action.enum).toEqual(["start", "write", "kill"]);
-    expect(schema.properties.waitMs.default).toBe(1000);
+    expect(schema.properties).toBeUndefined();
+    expect(variants).toHaveLength(3);
+
+    expect(Object.keys(variant("start")?.properties ?? {})).toEqual([
+      "action",
+      "command",
+      "name",
+      "waitMs",
+    ]);
+    expect(variant("start")?.required).toEqual(["action", "command"]);
+    expect(variant("start")?.properties.waitMs.default).toBe(1000);
+
+    expect(Object.keys(variant("write")?.properties ?? {})).toEqual([
+      "action",
+      "sessionId",
+      "input",
+      "signal",
+      "waitMs",
+    ]);
+    expect(variant("write")?.required).toEqual(["action", "sessionId"]);
+    expect(variant("write")?.properties.input.default).toBe("");
+    expect(variant("write")?.properties.waitMs.default).toBe(1000);
+
+    expect(Object.keys(variant("kill")?.properties ?? {})).toEqual(["action", "sessionId"]);
+    expect(variant("kill")?.required).toEqual(["action", "sessionId"]);
+  });
+
+  it("uses enum discriminators instead of const", () => {
+    const variants = shellToolCallSchema().typeBoxSchema.oneOf as Record<string, any>[];
+
+    expect(variants.map((variant) => variant.properties.action.enum)).toEqual([
+      ["start"],
+      ["write"],
+      ["kill"],
+    ]);
+    expect(variants.every((variant) => variant.properties.action.const === undefined)).toBe(true);
+    expect(variants.every((variant) => variant.additionalProperties === false)).toBe(true);
   });
 
   it("defaults write input to an empty poll", async () => {
@@ -139,6 +177,50 @@ describe("interactive shell schema generation", () => {
       input: "",
       waitMs: 1000,
     });
+  });
+
+  it("keeps runtime parsing action-specific", async () => {
+    const startResult = await shellToolCallSchema().handleInput(
+      {
+        action: "start",
+        command: "printf hi",
+        sessionId: "sh_0123456789ab",
+        input: "unexpected",
+        signal: "SIGINT",
+      },
+      (input) => input,
+    );
+    const killResult = await shellToolCallSchema().handleInput(
+      { action: "kill", sessionId: "sh_0123456789ab" },
+      (input) => input,
+    );
+
+    expect(startResult).toEqual({ action: "start", command: "printf hi", waitMs: 1000 });
+    expect(killResult).toEqual({ action: "kill", sessionId: "sh_0123456789ab" });
+  });
+
+  it.each([
+    ["start without a command", { action: "start" }],
+    ["write without a session id", { action: "write", input: "echo hi\n" }],
+    ["kill without a session id", { action: "kill" }],
+  ])("rejects %s", async (_name, input) => {
+    const result = await shellToolCallSchema().handleInput(input, (parsed) => parsed);
+
+    expect(result).toEqual({ error: expect.stringContaining("Invalid shell input") });
+  });
+
+  it("rejects invalid signals and wait times", async () => {
+    const invalidSignal = await shellToolCallSchema().handleInput(
+      { action: "write", sessionId: "sh_0123456789ab", signal: "SIGHUP" },
+      (input) => input,
+    );
+    const invalidWaitTime = await shellToolCallSchema().handleInput(
+      { action: "start", command: "printf hi", waitMs: 5001 },
+      (input) => input,
+    );
+
+    expect(invalidSignal).toEqual({ error: expect.stringContaining("Invalid shell input") });
+    expect(invalidWaitTime).toEqual({ error: expect.stringContaining("Invalid shell input") });
   });
 
   it("rejects malformed session ids", async () => {
